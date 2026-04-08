@@ -1,0 +1,190 @@
+:root {
+  color-scheme: light;
+}
+
+code,
+pre,
+textarea {
+  font-family:
+    "SFMono-Regular",
+    "JetBrains Mono",
+    "Fira Code",
+    ui-monospace,
+    monospace;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.shell {
+  padding-top: 2rem;
+  padding-bottom: 3rem;
+}
+
+.hero {
+  margin-bottom: 1rem;
+}
+
+.lead,
+.boot-copy {
+  max-width: 58rem;
+}
+
+.eyebrow {
+  margin-bottom: 0.4rem;
+  color: var(--pico-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.workspace,
+.results {
+  align-items: start;
+}
+
+.editor,
+.field,
+.controls,
+.status-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.section-header {
+  margin-bottom: 0.75rem;
+}
+
+.section-header > h2,
+.field > h2 {
+  margin-bottom: 0;
+}
+
+.tre-input {
+  min-height: 14rem;
+  resize: vertical;
+}
+
+.action-grid {
+  margin: 0;
+}
+
+.action-grid button {
+  font-size: 0.9rem;
+}
+
+.section-header__row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.section-header__row h2 {
+  margin-bottom: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.header-actions button {
+  width: auto;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.toggle {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0;
+}
+
+.toggle input {
+  margin: 0;
+}
+
+.status,
+.error,
+.syntax-note {
+  margin: 0;
+}
+
+.status,
+.syntax-note,
+.render-placeholder {
+  color: var(--pico-muted-color);
+}
+
+.syntax-note {
+  margin-top: 0.75rem;
+}
+
+.output-block,
+.syntax-block {
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.render-pane {
+  min-height: 22rem;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+}
+
+.render-pane.is-empty {
+  border-style: dashed;
+}
+
+.render-pane svg {
+  width: 100%;
+  height: auto;
+}
+
+.render-placeholder {
+  max-width: 28rem;
+  text-align: center;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.boot {
+  padding-top: 3rem;
+}
+
+@media (max-width: 768px) {
+  .shell {
+    padding-top: 1rem;
+    padding-bottom: 2rem;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions button {
+    flex: 1 1 0;
+  }
+}

@@ -1,0 +1,115 @@
+grammar<L, F>(parse_label: &mut F)
+where
+    F: for<'a> FnMut(&'a str) -> Result<L, String>;
+
+use std::str::FromStr;
+use crate::tre::{Interval, TimedRegex};
+
+extern {
+    type Error = String;
+}
+
+pub Regex: TimedRegex<L> = {
+    <e:Union> => e,
+};
+
+Union: TimedRegex<L> = {
+    <l:Union> "|" <r:Intersection> => TimedRegex::Union(Box::new(l), Box::new(r)),
+    <e:Intersection> => e,
+};
+
+Intersection: TimedRegex<L> = {
+    <l:Intersection> "&" <r:Concat> => TimedRegex::Intersection(Box::new(l), Box::new(r)),
+    <e:Concat> => e,
+};
+
+Concat: TimedRegex<L> = {
+    <l:Concat> ";" <r:Postfix> => TimedRegex::Concat(Box::new(l), Box::new(r)),
+    <e:Postfix> => e,
+};
+
+Postfix: TimedRegex<L> = {
+    <e:Postfix> "*" => TimedRegex::KleeneStar(Box::new(e)),
+    <e:Postfix> "+" => TimedRegex::KleenePlus(Box::new(e)),
+    <e:Postfix> "%" <c:TimingConstraint> => TimedRegex::Within(Box::new(e), c),
+    <e:Primary> => e,
+};
+
+Primary: TimedRegex<L> = {
+    "eps" => TimedRegex::Epsilon,
+    "empty" => TimedRegex::Empty,
+    <a:Atom> => TimedRegex::Atom(a),
+    "(" <e:Regex> ")" => e,
+};
+
+TimingConstraint: Interval = {
+    <c:IntervalConstraint> => c,
+    "(" <c:InequalityConstraint> ")" => c,
+};
+
+InequalityConstraint: Interval = {
+    "<"  <n:Number> => Interval {
+        lower: 0,
+        upper: Some(n),
+        lower_inclusive: true,
+        upper_inclusive: false,
+    },
+    "<=" <n:Number> => Interval {
+        lower: 0,
+        upper: Some(n),
+        lower_inclusive: true,
+        upper_inclusive: true,
+    },
+    ">"  <n:Number> => Interval {
+        lower: n,
+        upper: None,
+        lower_inclusive: false,
+        upper_inclusive: false,
+    },
+    ">=" <n:Number> => Interval {
+        lower: n,
+        upper: None,
+        lower_inclusive: true,
+        upper_inclusive: false,
+    },
+};
+
+IntervalConstraint: Interval = {
+    "[" <lo:Number> "," <hi:Bound> "]" => Interval {
+        lower: lo,
+        upper: hi,
+        lower_inclusive: true,
+        upper_inclusive: true,
+    },
+    "[" <lo:Number> "," <hi:Bound> ")" => Interval {
+        lower: lo,
+        upper: hi,
+        lower_inclusive: true,
+        upper_inclusive: false,
+    },
+    "(" <lo:Number> "," <hi:Bound> "]" => Interval {
+        lower: lo,
+        upper: hi,
+        lower_inclusive: false,
+        upper_inclusive: true,
+    },
+    "(" <lo:Number> "," <hi:Bound> ")" => Interval {
+        lower: lo,
+        upper: hi,
+        lower_inclusive: false,
+        upper_inclusive: false,
+    },
+};
+
+Atom: L = {
+    <s:r"[A-Za-z_][A-Za-z0-9_]*"> =>? Ok(parse_label(s)?),
+};
+
+Number: u64 = {
+    <s:r"[0-9]+"> => u64::from_str(s).unwrap(),
+};
+
+Bound: Option<u64> = {
+    "inf" => None,
+    <n:Number> => Some(n),
+};
