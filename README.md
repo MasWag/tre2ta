@@ -1,8 +1,9 @@
 # tre2ta
 
+[![CI](https://github.com/MasWag/tre2ta/actions/workflows/ci.yml/badge.svg)](https://github.com/MasWag/tre2ta/actions/workflows/ci.yml)
 [![License: Apache-2.0 OR MIT](https://img.shields.io/badge/License-Apache--2.0%20OR%20MIT-blue.svg)](#license)
 [![Rustdoc](https://img.shields.io/badge/Rustdoc-latest-orange)](https://maswag.github.io/tre2ta/doc)
-[![Web Demo](https://img.shields.io/badge/online-available-green)](https://maswag.github.io/tre2ta)
+[![Online translator](https://img.shields.io/badge/online-translator-green)](https://maswag.github.io/tre2ta)
 
 `tre2ta` is a Rust library for translating **timed regular expressions** (TREs) into **timed automata** (TAs).
 
