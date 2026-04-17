@@ -1,0 +1,90 @@
+name: Deploy Pages
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install wasm-pack
+        run: cargo install --locked wasm-pack
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build web demo
+        working-directory: web
+        run: npm run build
+
+      - name: Build Rust docs
+        run: cargo doc --no-deps
+
+      - name: Render construction page
+        run: node web/scripts/build-construction-page.mjs site/construction/index.html
+
+      - name: Assemble Pages site
+        run: |
+          mkdir -p site/doc site/pkg
+          cp -R web/dist/. site/
+          cp -R web/pkg/. site/pkg/
+          cp -R target/doc/. site/doc/
+          cat > site/doc/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8" />
+              <meta http-equiv="refresh" content="0; url=./tre2ta/" />
+              <title>tre2ta Rust docs</title>
+            </head>
+            <body>
+              <p>Redirecting to <a href="./tre2ta/">the tre2ta Rust docs</a>.</p>
+            </body>
+          </html>
+          EOF
+          touch site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
