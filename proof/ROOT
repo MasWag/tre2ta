@@ -1,0 +1,16 @@
+session TRE2TA_Proof = "HOL-Library" +
+  options [document = false]
+  theories
+    Interval
+    Timed_Word
+    TRE_Syntax
+    TRE_Semantics
+    TA_Syntax
+    TA_Semantics
+    TA_Combinators
+    Trim
+    Time_Restriction
+    Concat
+    Kleene
+    Label_Algebra
+    Intersection
