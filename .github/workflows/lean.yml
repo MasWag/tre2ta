@@ -1,0 +1,28 @@
+name: Lean Proof
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - isabelle
+
+jobs:
+  lean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: proof-lean
+
+      - name: Build Lean proof
+        working-directory: proof-lean
+        run: lake build
+
+      - name: Check for unfinished Lean proofs
+        run: |
+          if grep -R -n -E '\b(sorry|admit)\b' proof-lean/LeanTre2Ta; then
+            exit 1
+          fi
