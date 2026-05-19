@@ -66,7 +66,7 @@ theorem langPow_succ (L : Set (TimedWord α)) (n : Nat) :
 theorem subset_plusLang (L : Set (TimedWord α)) :
     L ⊆ plusLang L := by
   intro w hw
-  exact ⟨0, w, hw, [], by simp [langPow], by simp⟩
+  exact ⟨0, w, hw, by simp [langPow]⟩
 
 theorem plusLang_subset_starLang (L : Set (TimedWord α)) :
     plusLang L ⊆ starLang L := by
