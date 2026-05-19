@@ -1,4 +1,4 @@
-import LeanTre2Ta.TA.Concat
+import LeanTre2Ta.TimedAutomata.Constructions.Concat
 
 namespace LeanTre2Ta
 

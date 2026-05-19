@@ -1,4 +1,4 @@
-import LeanTre2Ta.Interval
+import LeanTre2Ta.Basic.Interval
 
 namespace LeanTre2Ta
 

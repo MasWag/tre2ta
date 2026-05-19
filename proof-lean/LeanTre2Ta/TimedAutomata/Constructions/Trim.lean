@@ -1,4 +1,4 @@
-import LeanTre2Ta.TA.Combinators
+import LeanTre2Ta.TimedAutomata.Combinators
 
 namespace LeanTre2Ta
 

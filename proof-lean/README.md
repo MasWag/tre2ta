@@ -35,26 +35,46 @@ structure SomeAutomaton (α : Type u) where
 The main correctness theorems are:
 
 ```lean
-theorem compile_correct [DecidableEq α] (r : TRE α) :
+theorem TRE.compile_correct [DecidableEq α] (r : TRE α) :
     (compile r).lang = TRE.lang r
 
-theorem compile_trim_correct [DecidableEq α] (r : TRE α) :
+theorem TRE.compile_trim_correct [DecidableEq α] (r : TRE α) :
     (trimToAccepting (compile r).aut).lang = TRE.lang r
 ```
 
 `Automaton.lang` is defined from the operational acceptance relation
 `AcceptsRun`; automata do not contain a stored extensional language field.
 
+## Project Structure
+
+The Lean development distinguishes between reusable TimedAutomata infrastructure
+and TRE-specific definitions:
+
+### TimedAutomata/
+
+The `TimedAutomata` namespace contains definition and construction files.
+
+- `Interval.lean` - intervals over real-valued durations
+- `TimedWord.lean` - delay-based timed words and their duration
+- `Syntax.lean` - clocks, valuations, guards, transitions, automata
+- `Semantics.lean` - operational run semantics (RunFrom, AcceptsRun, lang)
+- `LabelAlgebra.lean` - label algebra for equality/intersection semantics
+- `Combinators.lean` - generic automaton operations (map, unionTaggedTA)
+- `Constructions/Concat.lean` - concatenation with tagged locations and clock separation
+- `Constructions/Kleene.lean` - Kleene star (epsilon-or-plus) and plus (restart-loop)
+- `Constructions/TimeRestriction.lean` - time restriction with fresh duration clock
+- `Constructions/Intersection.lean` - product construction using label algebra
+
+### TRE/
+
+The `TRE` namespace contains timed regular expression definitions and proofs.
+
+- `Syntax.lean` - TRE syntax (Empty, Epsilon, Atom, Union, Intersection, Concat, KleeneStar, KleenePlus, Within)
+- `Semantics.lean` - denotational semantics `tre_lang`
+- `Compile.lean` - TRE-to-TA compiler and correctness theorems
+- `Correctness.lean` - compatibility re-exports for old imports
+
 ## What Is Proved
-
-The Lean development defines:
-
-- intervals over real-valued durations;
-- delay-based timed words and their duration;
-- timed regular expression syntax and denotational semantics;
-- timed-automaton syntax, clock valuations, guards, transitions, and runs;
-- the TRE-to-TA constructions for all TRE constructors;
-- co-reachability trimming by `trimToAccepting`.
 
 The compiler theorem covers:
 
@@ -73,7 +93,7 @@ The main construction theorems are:
 - `emptyTA_lang`
 - `epsilonTA_lang`
 - `atomTA_lang`
-- `union_correct`
+- `unionTagged_correct`
 - `trim_correct`
 - `timeRestrict_correct`
 - `concat_correct`

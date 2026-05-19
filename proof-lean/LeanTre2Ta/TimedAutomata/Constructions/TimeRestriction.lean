@@ -1,4 +1,4 @@
-import LeanTre2Ta.TA.Trim
+import LeanTre2Ta.TimedAutomata.Constructions.Trim
 
 namespace LeanTre2Ta
 

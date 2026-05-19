@@ -1,4 +1,4 @@
-import LeanTre2Ta.TA.Syntax
+import LeanTre2Ta.TimedAutomata.Syntax
 
 namespace LeanTre2Ta
 

@@ -1,4 +1,4 @@
-import LeanTre2Ta.TA.LabelAlgebra
+import LeanTre2Ta.TimedAutomata.LabelAlgebra
 
 namespace LeanTre2Ta
 

@@ -1,4 +1,4 @@
-import LeanTre2Ta.TA.TimeRestriction
+import LeanTre2Ta.TimedAutomata.Constructions.TimeRestriction
 
 namespace LeanTre2Ta
 

@@ -1,6 +1,6 @@
-import LeanTre2Ta.TA.Kleene
-import LeanTre2Ta.TA.Intersection
-import LeanTre2Ta.TA.Trim
+import LeanTre2Ta.TimedAutomata.Constructions.Kleene
+import LeanTre2Ta.TimedAutomata.Constructions.Intersection
+import LeanTre2Ta.TimedAutomata.Constructions.Trim
 
 namespace LeanTre2Ta
 

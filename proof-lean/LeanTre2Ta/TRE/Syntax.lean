@@ -1,4 +1,4 @@
-import LeanTre2Ta.TimedWord
+import LeanTre2Ta.Basic.TimedWord
 
 namespace LeanTre2Ta
 

@@ -1,4 +1,4 @@
-import LeanTre2Ta.TA.Semantics
+import LeanTre2Ta.TimedAutomata.Semantics
 
 namespace LeanTre2Ta
 

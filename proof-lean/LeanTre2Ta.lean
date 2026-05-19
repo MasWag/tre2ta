@@ -1,1 +1,2 @@
-import LeanTre2Ta.Correctness
+import LeanTre2Ta.TRE
+import LeanTre2Ta.TimedAutomata
