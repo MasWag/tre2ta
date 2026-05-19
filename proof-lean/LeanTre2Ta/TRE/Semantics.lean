@@ -66,13 +66,17 @@ theorem langPow_succ (L : Set (TimedWord α)) (n : Nat) :
 theorem subset_plusLang (L : Set (TimedWord α)) :
     L ⊆ plusLang L := by
   intro w hw
-  exact ⟨0, w, hw, by simp [langPow]⟩
+  simp [plusLang, langPow, concatLang]
+  use 0
+  simp [langPow]
+  exact hw
 
 theorem plusLang_subset_starLang (L : Set (TimedWord α)) :
     plusLang L ⊆ starLang L := by
   intro w hw
   rcases hw with ⟨n, hn⟩
-  exact ⟨n + 1, hn⟩
+  simp [starLang]
+  use (n + 1)
 
 theorem starLang_empty_union_plus (L : Set (TimedWord α)) :
     starLang L = ({[]} : Set (TimedWord α)) ∪ plusLang L := by
@@ -82,16 +86,22 @@ theorem starLang_empty_union_plus (L : Set (TimedWord α)) :
     rcases hw with ⟨n, hn⟩
     cases n with
     | zero =>
+        unfold langPow at hn
         left
         exact hn
     | succ n =>
         right
-        exact ⟨n, hn⟩
+        simp [plusLang]
+        use n
   · intro hw
     rcases hw with hw | hw
-    · exact ⟨0, hw⟩
+    · simp [starLang]
+      use 0
+      simp [langPow]
+      exact hw
     · rcases hw with ⟨n, hn⟩
-      exact ⟨n + 1, hn⟩
+      simp [starLang]
+      use (n + 1)
 
 end LeanTre2Ta
 
