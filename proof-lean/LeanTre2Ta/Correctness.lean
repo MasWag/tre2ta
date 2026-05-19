@@ -34,10 +34,10 @@ def compile [DecidableEq α] : TRE α → SomeAutomaton α
       ⟨Sum A.Loc B.Loc, concatTA A.aut B.aut⟩
   | .star r =>
       let A := compile r
-      ⟨Sum Nat (PlusLoc A.Loc), starTA A.aut⟩
+      ⟨Sum Nat A.Loc, starTA A.aut⟩
   | .plus r =>
       let A := compile r
-      ⟨PlusLoc A.Loc, plusTA A.aut⟩
+      ⟨A.Loc, plusTA A.aut⟩
   | .within r I =>
       let A := compile r
       ⟨Option A.Loc, timeRestrictTA A.aut I⟩

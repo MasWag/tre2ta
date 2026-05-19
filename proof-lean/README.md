@@ -1,7 +1,9 @@
 # Lean TRE-to-TA proof
 
-This directory contains a Lean 4 port of the Isabelle/HOL proof under
-`proof/` on the `isabelle` branch of `MasWag/tre2ta`.
+This directory contains a Lean 4 port of the self-contained Isabelle/HOL proof
+under `proof/` on the `isabelle` branch of `MasWag/tre2ta`.  The development
+proves the mathematical TRE-to-TA construction; it does not verify the Rust
+implementation itself.
 
 ## Build
 
@@ -10,19 +12,109 @@ cd proof-lean
 lake build
 ```
 
-Local unfinished-proof check:
+The project uses Lean 4.29.1 and mathlib.  A local unfinished-proof check is:
 
 ```sh
 grep -R "sorry\\|admit" LeanTre2Ta || true
 ```
 
-The project uses Lean 4.29.1 and mathlib. In sandboxed environments where
-`elan` cannot write to its default settings file, invoking the Lake binary from
-the installed Lean toolchain directly may be necessary.
+In sandboxed environments where `elan` cannot write to its default settings
+file, it may be necessary to invoke the Lake binary from the installed Lean
+toolchain directly.
 
-## Source Isabelle Theories
+## Main Theorems
 
-The port follows these Isabelle files:
+The public compiler packages automata with their location type:
+
+```lean
+structure SomeAutomaton (α : Type u) where
+  Loc : Type
+  aut : Automaton Loc α
+```
+
+The main correctness theorems are:
+
+```lean
+theorem compile_correct [DecidableEq α] (r : TRE α) :
+    (compile r).lang = TRE.lang r
+
+theorem compile_trim_correct [DecidableEq α] (r : TRE α) :
+    (trimToAccepting (compile r).aut).lang = TRE.lang r
+```
+
+`Automaton.lang` is defined from the operational acceptance relation
+`AcceptsRun`; automata do not contain a stored extensional language field.
+
+## What Is Proved
+
+The Lean development defines:
+
+- intervals over real-valued durations;
+- delay-based timed words and their duration;
+- timed regular expression syntax and denotational semantics;
+- timed-automaton syntax, clock valuations, guards, transitions, and runs;
+- the TRE-to-TA constructions for all TRE constructors;
+- co-reachability trimming by `trimToAccepting`.
+
+The compiler theorem covers:
+
+- `Empty`
+- `Epsilon`
+- `Atom`
+- `Union`
+- `Intersection`
+- `Concat`
+- `KleeneStar`
+- `KleenePlus`
+- `Within`
+
+The main construction theorems are:
+
+- `emptyTA_lang`
+- `epsilonTA_lang`
+- `atomTA_lang`
+- `union_correct`
+- `trim_correct`
+- `timeRestrict_correct`
+- `concat_correct`
+- `plus_correct`
+- `star_correct`
+- `product_correct`
+- `product_correct_eq`
+
+## Construction Notes
+
+Union uses tagged locations internally, so the two component automata cannot
+collide at shared location names.
+
+Time restriction shifts the input automaton's clocks by one and reserves clock
+`0` as the fresh duration clock.  Guarded duplicate transitions enter a fresh
+accepting sink when the total elapsed duration is in the interval.  Empty-word
+acceptance is handled by making that sink initial exactly when the original
+automaton accepts `[]` and `0` belongs to the interval.
+
+Concatenation uses tagged locations.  A switching transition consumes the event
+that completes the left component, enters an initial right state, and resets the
+renamed right-clock namespace.  This matches the Rust construction's handoff
+discipline while keeping the Lean clock namespaces separated for the proof.
+
+Kleene plus uses a primitive restart-loop construction.  `plusTA` keeps the
+original automaton and adds duplicate transitions from transitions entering
+accepting states back to initial states.  These duplicate transitions consume
+the same event and reset the semantic clock valuation before the next
+iteration.  In Lean the restart reset set is `Set.univ`, because valuations are
+total functions `Clock → ℝ`; this is the assumption-free analogue of resetting
+all allocated clocks.  Kleene star is defined as epsilon-or-plus.
+
+Intersection is proved using a label-algebraic run semantics.  The generic
+product theorem is `product_correct`; `product_correct_eq` specializes it to
+ordinary equality labels used by the public compiler.  The product construction
+places component clocks into disjoint even/odd namespaces before synchronizing
+transitions.
+
+## Relation to Isabelle
+
+The Lean port follows these Isabelle theories:
 
 - `Interval.thy`
 - `Timed_Word.thy`
@@ -38,96 +130,13 @@ The port follows these Isabelle files:
 - `Label_Algebra.thy`
 - `Intersection.thy`
 
-## Current Build Milestone
+## Out of Scope
 
-The checked Lean root currently covers the base automata, union, trimming, time
-restriction, concatenation, Kleene plus/star, and equality-label
-intersection/product milestones:
+This proof does not verify:
 
-- `emptyTA_lang`
-- `epsilonTA_lang`
-- `atomTA_lang`
-- `unionTagged_correct`
-- `trim_correct`
-- `timeRestrict_correct`
-- `concat_correct`
-- `plus_correct`
-- `star_correct`
-- `LabelAlgebra.runFromL_eq_iff`
-- `LabelAlgebra.runLang_eq_lang`
-- `product_correct`
-- `product_correct_eq`
-- `compile_correct`
-- `compile_trim_correct`
-
-## Main theorem
-
-```lean
-theorem compile_correct [DecidableEq α] (r : TRE α) :
-    (compile r).lang = TRE.lang r
-
-theorem compile_trim_correct [DecidableEq α] (r : TRE α) :
-    (trimToAccepting (compile r).aut).lang = TRE.lang r
-```
-
-## What Is Proved
-
-The Lean development defines intervals, delay-based timed words, TRE syntax,
-denotational TRE semantics, timed-automaton syntax, and an operational run
-relation. `Automaton.lang` is defined from `AcceptsRun`; automata do not carry
-an extensional language field. The checked compiler theorem covers
-`Empty`, `Epsilon`, `Atom`, `Union`, recursive `Concat`, `KleenePlus`,
-`KleeneStar`, `Within`, and `Intersection`.
-
-The product proof is operational through `RunFromL` and `Automaton.langL`, then
-specialized back to the ordinary equality-label `Automaton.lang` semantics. The
-public compiler uses `productTA`, which places the two component
-automata into disjoint even/odd clock namespaces before synchronizing them.
-The trimming proof is operational through `RunFrom` and `AcceptsRun`.
-
-## Construction Notes
-
-The concatenation proof uses tagged `Sum` locations. Its switching transition
-consumes the event that completes the left component, maps the right component
-into a separated clock namespace, and resets that right-clock namespace before
-entering an initial right state. This matches the Rust construction's handoff
-discipline more closely than the earlier all-clock reset model.
-
-The Kleene proof is also proof-oriented: `plusTA` is the disjoint union of all
-positive powers built from the proved concatenation construction, and `starTA`
-is epsilon-or-plus. The Rust construction instead uses a primitive restart-loop
-automaton for plus.
-
-The time-restriction proof shifts every input clock by one and reserves clock
-`0` as the fresh duration clock. Original transitions remain available for
-continuing runs, while guarded duplicate transitions enter a fresh accepting
-sink when the total elapsed duration is in the interval. Empty-word acceptance
-is handled by making the sink initial exactly when the original automaton
-accepts `[]` and `0` satisfies the interval.
-
-The product theorem used by the public compiler is `product_correct`,
-which renames clocks before taking the product.
-
-## Scope
-
-The checked Lean proof currently covers:
-
-- Empty
-- Epsilon
-- Atom
-- Union
-- Within
-- Concat
-- KleenePlus
-- KleeneStar
-- Intersection, for equality labels in the compiler
-- `trimToAccepting`
-
-The Isabelle source proof under `proof/` covers the broader mathematical
-construction.
-
-## Out of scope
-
-This Lean proof is about the mathematical TRE-to-TA construction. It does not
-verify the Rust implementation, parser, DOT export, JANI export, WASM wrapper,
-or CLI.
+- the Rust implementation;
+- the parser;
+- DOT export;
+- JANI export;
+- the WASM wrapper;
+- the CLI.

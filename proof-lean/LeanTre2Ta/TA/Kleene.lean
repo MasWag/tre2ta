@@ -2,120 +2,51 @@ import LeanTre2Ta.TA.Concat
 
 namespace LeanTre2Ta
 
-def PowLoc (Loc : Type u) : Nat → Type u
-  | 0 => PUnit
-  | n + 1 => Sum Loc (PowLoc Loc n)
+theorem resetVal_union_univ (rs : Set Clock) (v : Valuation) :
+    resetVal (rs ∪ Set.univ) v = zeroVal := by
+  ext x
+  simp [resetVal, zeroVal]
 
-def epsilonUnitTA (α : Type u) : Automaton PUnit α :=
-  { locations := {PUnit.unit}
-    initial := {PUnit.unit}
-    accepting := {PUnit.unit}
-    clocks := ∅
-    transitions := ∅ }
+theorem resetVal_univ (v : Valuation) :
+    resetVal Set.univ v = zeroVal := by
+  ext x
+  simp [resetVal, zeroVal]
 
-@[simp] theorem epsilonUnitTA_lang :
-    (epsilonUnitTA α).lang = ({[]} : Set (TimedWord α)) := by
-  ext w
-  constructor
-  · intro h
-    rcases h with ⟨q₀, hq₀, qf, hqf, vf, hrun⟩
-    have hw := runFrom_noTransitions (A := epsilonUnitTA α) (by simp [epsilonUnitTA]) hrun
-    exact hw.1
-  · intro h
-    rcases h with rfl
-    exact ⟨PUnit.unit, by simp [epsilonUnitTA], PUnit.unit,
-      by simp [epsilonUnitTA], zeroVal,
-      RunFrom.nil (epsilonUnitTA α) PUnit.unit zeroVal⟩
-
-def powTA (A : Automaton Loc α) : (n : Nat) → Automaton (PowLoc Loc n) α
-  | 0 => epsilonUnitTA α
-  | n + 1 => concatTA A (powTA A n)
-
-theorem powTA_correct (A : Automaton Loc α) (n : Nat) :
-    (powTA A n).lang = langPow A.lang n := by
-  induction n with
-  | zero =>
-      exact epsilonUnitTA_lang
-  | succ n ih =>
-      change (concatTA A (powTA A n)).lang = concatLang A.lang (langPow A.lang n)
-      rw [concat_correct, ih]
-
-abbrev PlusLoc (Loc : Type u) : Type u :=
-  Sigma (fun n : Nat => PowLoc Loc (n + 1))
-
-def tagPowTransition (n : Nat)
-    (t : Transition (PowLoc Loc (n + 1)) α) :
-    Transition (PlusLoc Loc) α :=
-  { source := ⟨n, t.source⟩
+def restartTransition (t : Transition Loc α) (q₀ : Loc) :
+    Transition Loc α :=
+  { source := t.source
     label := t.label
     guards := t.guards
-    resets := t.resets
-    target := ⟨n, t.target⟩ }
+    resets := t.resets ∪ Set.univ
+    target := q₀ }
 
-/- This is a proof-oriented positive-closure construction: it is the disjoint
-   union of all positive powers of `A`.  It is operational, but not the Rust
-   restart-loop construction. -/
-def plusTA (A : Automaton Loc α) : Automaton (PlusLoc Loc) α :=
-  { locations := {q | q.2 ∈ (powTA A (q.1 + 1)).locations}
-    initial := {q | q.2 ∈ (powTA A (q.1 + 1)).initial}
-    accepting := {q | q.2 ∈ (powTA A (q.1 + 1)).accepting}
+/- Rust-like positive closure: keep the original automaton and add a duplicate
+   of each transition entering an accepting state, redirected to every initial
+   state.  The duplicate consumes the same event and resets the semantic clock
+   valuation before the next iteration.  We use `Set.univ` for the reset set
+   because Lean valuations are total functions `Clock → ℝ`; resetting only
+   `A.clocks` would need a separate clock-closure invariant. -/
+def plusTA (A : Automaton Loc α) : Automaton Loc α :=
+  { locations := A.locations
+    initial := A.initial
+    accepting := A.accepting
     clocks := A.clocks
-    transitions :=
-      {u | ∃ n, ∃ t ∈ (powTA A (n + 1)).transitions,
-        u = tagPowTransition n t} }
+    transitions := A.transitions ∪
+      {u | ∃ t ∈ A.transitions, t.target ∈ A.accepting ∧
+        ∃ q₀ ∈ A.initial, u = restartTransition t q₀} }
 
-theorem runFrom_lift_plus_pow
-    {A : Automaton Loc α} {n : Nat}
-    {p q : PowLoc Loc (n + 1)} {v vf : Valuation} {w : TimedWord α}
-    (h : RunFrom (powTA A (n + 1)) p v w q vf) :
-    RunFrom (plusTA A) ⟨n, p⟩ v w ⟨n, q⟩ vf := by
+theorem runFrom_lift_plus
+    {A : Automaton Loc α} {p q : Loc} {v vf : Valuation}
+    {w : TimedWord α}
+    (h : RunFrom A p v w q vf) :
+    RunFrom (plusTA A) p v w q vf := by
   induction h with
   | nil q v =>
-      exact RunFrom.nil (plusTA A) ⟨n, q⟩ v
+      exact RunFrom.nil (plusTA A) q v
   | cons t ht hsource hlabel hnonneg hguards htail ih =>
-      exact RunFrom.cons (tagPowTransition n t)
-        (by exact ⟨n, t, ht, rfl⟩)
-        (by simp [tagPowTransition, hsource])
-        (by simp [tagPowTransition, hlabel])
-        hnonneg
-        (by simpa [tagPowTransition] using hguards)
-        (by simpa [tagPowTransition] using ih)
-
-theorem runFrom_project_plus_pow_aux
-    {A : Automaton Loc α} {n : Nat}
-    {qstart qend : PlusLoc Loc} {p : PowLoc Loc (n + 1)}
-    {v vf : Valuation} {w : TimedWord α}
-    (h : RunFrom (plusTA A) qstart v w qend vf)
-    (hstart : qstart = ⟨n, p⟩) :
-    ∃ q : PowLoc Loc (n + 1),
-      qend = ⟨n, q⟩ ∧ RunFrom (powTA A (n + 1)) p v w q vf := by
-  induction h generalizing n p with
-  | nil q v =>
-      cases hstart
-      exact ⟨p, rfl, RunFrom.nil (powTA A (n + 1)) p v⟩
-  | cons t ht hsource hlabel hnonneg hguards htail ih =>
-      rename_i x y v0 vf0 d a wTail
-      rcases ht with ⟨m, tPow, htPow, htEq⟩
-      subst htEq
-      have hsrc : (⟨m, tPow.source⟩ : PlusLoc Loc) = ⟨n, p⟩ := by
-        simpa [tagPowTransition, hstart] using hsource
-      cases hsrc
-      rcases ih rfl with ⟨q, hqend, htailPow⟩
-      exact ⟨q, hqend,
-        RunFrom.cons tPow htPow rfl
-          (by simpa [tagPowTransition] using hlabel)
-          hnonneg
-          (by simpa [tagPowTransition] using hguards)
-          htailPow⟩
-
-theorem runFrom_project_plus_pow
-    {A : Automaton Loc α} {n : Nat}
-    {p : PowLoc Loc (n + 1)} {qend : PlusLoc Loc}
-    {v vf : Valuation} {w : TimedWord α}
-    (h : RunFrom (plusTA A) ⟨n, p⟩ v w qend vf) :
-    ∃ q : PowLoc Loc (n + 1),
-      qend = ⟨n, q⟩ ∧ RunFrom (powTA A (n + 1)) p v w q vf :=
-  runFrom_project_plus_pow_aux h rfl
+      exact RunFrom.cons t
+        (by left; exact ht)
+        hsource hlabel hnonneg hguards ih
 
 theorem run_lift_plus
     {A : Automaton Loc α}
@@ -123,42 +54,165 @@ theorem run_lift_plus
     (hq₀ : q₀ ∈ A.initial)
     (hqf : qf ∈ A.accepting)
     (hrun : RunFrom A q₀ zeroVal w qf vf) :
-    w ∈ (plusTA A).lang := by
-  have hw : w ∈ (powTA A 1).lang := by
-    simpa [powTA, concatLang] using
-      (concat_complete A (epsilonUnitTA α)
-        ⟨w, ⟨q₀, hq₀, qf, hqf, vf, hrun⟩,
-          [], by simp, by simp⟩)
-  rcases hw with ⟨p₀, hp₀, pf, hpf, vfPow, hrunPow⟩
-  exact ⟨⟨0, p₀⟩, hp₀, ⟨0, pf⟩, hpf, vfPow,
-    runFrom_lift_plus_pow hrunPow⟩
+    w ∈ (plusTA A).lang :=
+  ⟨q₀, hq₀, qf, hqf, vf, runFrom_lift_plus hrun⟩
+
+theorem runFrom_A_restart_plus_of_nonempty
+    {A : Automaton Loc α}
+    {p q : Loc} {v vf : Valuation} {w : TimedWord α}
+    (h : RunFrom A p v w q vf)
+    (hnonempty : w ≠ [])
+    (hacc : q ∈ A.accepting)
+    (q₀ : Loc) (hq₀ : q₀ ∈ A.initial) :
+    RunFrom (plusTA A) p v w q₀ zeroVal := by
+  induction h generalizing q₀ with
+  | nil q v =>
+      exact False.elim (hnonempty rfl)
+  | cons t ht hsource hlabel hnonneg hguards htail ih =>
+      rename_i p0 q0 v0 vf0 d a wTail
+      by_cases htail_empty : wTail = []
+      · subst htail_empty
+        have htail_inv := runFrom_nil_inv htail
+        rcases htail_inv with ⟨hq, hv⟩
+        subst q0
+        subst vf0
+        have htacc : t.target ∈ A.accepting := hacc
+        exact RunFrom.cons (restartTransition t q₀)
+          (by
+            right
+            exact ⟨t, ht, htacc, q₀, hq₀, rfl⟩)
+          (by simp [restartTransition, hsource])
+          (by simp [restartTransition, hlabel])
+          hnonneg
+          (by simpa [restartTransition] using hguards)
+          (by
+            have hzero :
+                resetVal (restartTransition t q₀).resets (delayVal d v0) =
+                  zeroVal := by
+              simpa [restartTransition] using
+                resetVal_union_univ t.resets (delayVal d v0)
+            show RunFrom (plusTA A)
+              (restartTransition t q₀).target
+              (resetVal (restartTransition t q₀).resets (delayVal d v0))
+              [] q₀ zeroVal
+            simpa [restartTransition, resetVal_univ] using
+              (RunFrom.nil (plusTA A) q₀ zeroVal))
+      · exact RunFrom.cons t
+          (by left; exact ht)
+          hsource hlabel hnonneg hguards
+          (ih htail_empty hacc q₀ hq₀)
+
+theorem plusLang_cons
+    {L : Set (TimedWord α)} {u v : TimedWord α}
+    (hu : u ∈ L) (hv : v ∈ plusLang L) :
+    u ++ v ∈ plusLang L := by
+  rcases hv with ⟨n, hn⟩
+  exact ⟨n + 1, u, hu, v, hn, rfl⟩
+
+theorem plus_complete_pow (A : Automaton Loc α) :
+    ∀ n, langPow A.lang (n + 1) ⊆ (plusTA A).lang := by
+  intro n
+  induction n with
+  | zero =>
+      intro w h
+      change w ∈ concatLang A.lang (langPow A.lang 0) at h
+      rcases h with ⟨u, hu, v, hv, rfl⟩
+      have hvnil : v = [] := by simpa [langPow] using hv
+      subst hvnil
+      rcases hu with ⟨q₀, hq₀, qf, hqf, vf, hrun⟩
+      simpa using run_lift_plus hq₀ hqf hrun
+  | succ n ih =>
+      intro w h
+      change w ∈ concatLang A.lang (langPow A.lang (n + 1)) at h
+      rcases h with ⟨u, hu, vword, hvword, rfl⟩
+      by_cases hu_empty : u = []
+      · subst u
+        simpa using ih hvword
+      · rcases hu with ⟨q₀, hq₀, qf, hqf, vf, hrun⟩
+        rcases ih hvword with ⟨p₀, hp₀, pf, hpf, vfPlus, hrunPlus⟩
+        exact ⟨q₀, hq₀, pf, hpf, vfPlus,
+          runFrom_append
+            (runFrom_A_restart_plus_of_nonempty hrun hu_empty hqf p₀ hp₀)
+            hrunPlus⟩
 
 theorem plus_complete (A : Automaton Loc α) :
     plusLang A.lang ⊆ (plusTA A).lang := by
   intro w h
   rcases h with ⟨n, hn⟩
-  have hp : w ∈ (powTA A (n + 1)).lang := by
-    simpa [powTA_correct A (n + 1)] using hn
-  rcases hp with ⟨p₀, hp₀, pf, hpf, vf, hrun⟩
-  exact ⟨⟨n, p₀⟩, hp₀, ⟨n, pf⟩, hpf, vf,
-    runFrom_lift_plus_pow hrun⟩
+  exact plus_complete_pow A n hn
+
+theorem plus_sound_aux
+    {A : Automaton Loc α}
+    {p₀ p qf : Loc} {v vf : Valuation}
+    {pref suffix : TimedWord α}
+    (hp₀ : p₀ ∈ A.initial)
+    (hprefix : RunFrom A p₀ zeroVal pref p v)
+    (hrun : RunFrom (plusTA A) p v suffix qf vf)
+    (hqf : qf ∈ A.accepting) :
+    pref ++ suffix ∈ plusLang A.lang := by
+  induction hrun generalizing p₀ pref with
+  | nil q v =>
+      have hpref : pref ∈ A.lang := ⟨p₀, hp₀, q, hqf, v, hprefix⟩
+      simpa using subset_plusLang A.lang hpref
+  | cons t ht hsource hlabel hnonneg hguards htail ih =>
+      rename_i pcur qtail vcur vfTail d a wTail
+      rcases ht with htA | hrestart
+      · have hstep :
+            RunFrom A pcur vcur [(d, a)] t.target
+              (resetVal t.resets (delayVal d vcur)) :=
+          RunFrom.cons t htA hsource hlabel hnonneg hguards
+            (RunFrom.nil A t.target
+              (resetVal t.resets (delayVal d vcur)))
+        have hprefix' := runFrom_append hprefix hstep
+        have htailPlus := ih hp₀ hprefix' hqf
+        simpa [List.append_assoc] using htailPlus
+      · rcases hrestart with ⟨tA, htA, htacc, q₀, hq₀, htEq⟩
+        subst htEq
+        have hstep :
+            RunFrom A pcur vcur [(d, a)] tA.target
+              (resetVal tA.resets (delayVal d vcur)) :=
+          RunFrom.cons tA htA
+            (by simpa [restartTransition] using hsource)
+            (by simpa [restartTransition] using hlabel)
+            hnonneg
+            (by simpa [restartTransition] using hguards)
+            (RunFrom.nil A tA.target
+              (resetVal tA.resets (delayVal d vcur)))
+        have hprefix' := runFrom_append hprefix hstep
+        have hfirst : pref ++ [(d, a)] ∈ A.lang :=
+          ⟨p₀, hp₀, tA.target, htacc,
+            resetVal tA.resets (delayVal d vcur), hprefix'⟩
+        have hzero :
+            resetVal (restartTransition tA q₀).resets (delayVal d vcur) =
+              zeroVal := by
+          simpa [restartTransition] using
+            resetVal_union_univ tA.resets (delayVal d vcur)
+        have hnil :
+            RunFrom A q₀ zeroVal [] (restartTransition tA q₀).target
+              (resetVal (restartTransition tA q₀).resets (delayVal d vcur)) := by
+          simpa [restartTransition, resetVal_univ] using
+            (RunFrom.nil A q₀ zeroVal)
+        have htailPlus :
+            ([] : TimedWord α) ++ wTail ∈ plusLang A.lang :=
+          ih hq₀ hnil hqf
+        have htailPlus' : wTail ∈ plusLang A.lang := by
+          simpa using htailPlus
+        have hcombined := plusLang_cons hfirst htailPlus'
+        simpa [List.append_assoc] using hcombined
 
 theorem plus_sound (A : Automaton Loc α) :
     (plusTA A).lang ⊆ plusLang A.lang := by
   intro w h
   rcases h with ⟨q₀, hq₀, qf, hqf, vf, hrun⟩
-  rcases q₀ with ⟨n, p₀⟩
-  rcases runFrom_project_plus_pow hrun with ⟨pf, hqfEq, hrunPow⟩
-  subst qf
-  have hp : w ∈ (powTA A (n + 1)).lang :=
-    ⟨p₀, hq₀, pf, hqf, vf, hrunPow⟩
-  exact ⟨n, by simpa [powTA_correct A (n + 1)] using hp⟩
+  have hs :=
+    plus_sound_aux (A := A) hq₀ (RunFrom.nil A q₀ zeroVal) hrun hqf
+  simpa using hs
 
 theorem plus_correct (A : Automaton Loc α) :
     (plusTA A).lang = plusLang A.lang :=
   Set.Subset.antisymm (plus_sound A) (plus_complete A)
 
-def starTA (A : Automaton Loc α) : Automaton (Sum Nat (PlusLoc Loc)) α :=
+def starTA (A : Automaton Loc α) : Automaton (Sum Nat Loc) α :=
   unionTaggedTA (epsilonTA α) (plusTA A)
 
 theorem star_correct (A : Automaton Loc α) :
