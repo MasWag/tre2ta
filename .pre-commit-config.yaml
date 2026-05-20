@@ -1,0 +1,82 @@
+minimum_pre_commit_version: "3.2.0"
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-added-large-files
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all
+        language: system
+        pass_filenames: false
+        files: '(^|/)(Cargo\.toml|Cargo\.lock|build\.rs|.*\.rs)$'
+        stages: [pre-commit]
+
+      - id: lean-fmt
+        name: lean-fmt
+        entry: scripts/format-lean.sh
+        language: system
+        files: '^proof/.*\.lean$'
+        stages: [pre-commit]
+
+      - id: lean-no-sorry
+        name: Lean no sorry/admit
+        entry: bash -c '! grep -R -nE "\b(sorry|admit)\b" proof/LeanTre2Ta proof/LeanTre2Ta.lean'
+        language: system
+        pass_filenames: false
+        files: '^proof/.*\.lean$'
+        stages: [pre-commit]
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets --all-features -- -D warnings
+        language: system
+        pass_filenames: false
+        files: '(^|/)(Cargo\.toml|Cargo\.lock|build\.rs|.*\.rs)$'
+        stages: [pre-push, manual]
+
+      - id: cargo-test
+        name: cargo test
+        entry: cargo test
+        language: system
+        pass_filenames: false
+        files: '(^|/)(Cargo\.toml|Cargo\.lock|build\.rs|src/.*|tests/.*|.*\.rs)$'
+        stages: [pre-push, manual]
+
+      - id: wasm-test
+        name: cargo test tre2ta-wasm
+        entry: cargo test --manifest-path crates/tre2ta-wasm/Cargo.toml
+        language: system
+        pass_filenames: false
+        files: '^(crates/tre2ta-wasm/|src/|Cargo\.toml|Cargo\.lock|build\.rs)'
+        stages: [pre-push, manual]
+
+      - id: web-test
+        name: npm test in web
+        entry: bash -c 'cd web && npm test'
+        language: system
+        pass_filenames: false
+        files: '^web/'
+        stages: [pre-push, manual]
+
+      - id: lean-build
+        name: lake build in proof
+        entry: bash -c 'cd proof && lake build'
+        language: system
+        pass_filenames: false
+        files: '^proof/.*\.lean$|^proof/(lakefile\.lean|lake-manifest\.json|lean-toolchain)$'
+        stages: [pre-push, manual]
