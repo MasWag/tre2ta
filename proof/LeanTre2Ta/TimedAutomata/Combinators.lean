@@ -264,4 +264,15 @@ theorem union_correct
     (unionTaggedTA A B).lang = A.lang ∪ B.lang :=
   unionTagged_correct A B
 
+theorem unionTagged_guardsClosed
+    {A : Automaton Loc₁ α} {B : Automaton Loc₂ α}
+    (hA : guardsClosed A) (hB : guardsClosed B) :
+    guardsClosed (unionTaggedTA A B) := by
+  intro t ht g hg
+  rcases ht with hleft | hright
+  · rcases hleft with ⟨tA, htA, rfl⟩
+    exact Or.inl (hA tA htA g (by simpa [mapTransition] using hg))
+  · rcases hright with ⟨tB, htB, rfl⟩
+    exact Or.inr (hB tB htB g (by simpa [mapTransition] using hg))
+
 end LeanTre2Ta

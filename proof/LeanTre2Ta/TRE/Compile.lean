@@ -46,6 +46,32 @@ def compile [DecidableEq α] : TRE α → SomeAutomaton α
 def compile? [DecidableEq α] (r : TRE α) : Option (SomeAutomaton α) :=
   some (compile r)
 
+theorem compile_guardsClosed [DecidableEq α] (r : TRE α) :
+    guardsClosed (compile r).aut := by
+  induction r with
+  | empty =>
+      simpa [compile] using (emptyTA_guardsClosed (α := α))
+  | epsilon =>
+      simpa [compile] using (epsilonTA_guardsClosed (α := α))
+  | atom a =>
+      simpa [compile] using atomTA_guardsClosed a
+  | union r s ihr ihs =>
+      simpa [compile] using unionTagged_guardsClosed ihr ihs
+  | inter r s ihr ihs =>
+      simpa [compile] using
+        (product_guardsClosed
+          (alg := LabelAlgebra.equality (α := α))
+          (A := (compile r).aut) (B := (compile s).aut)
+          ihr ihs)
+  | concat r s ihr ihs =>
+      simpa [compile] using concat_guardsClosed ihr ihs
+  | star r ih =>
+      simpa [compile] using star_guardsClosed ih
+  | plus r ih =>
+      simpa [compile] using plus_guardsClosed ih
+  | within r I ih =>
+      simpa [compile] using timeRestrict_guardsClosed (I := I) ih
+
 theorem compile_correct [DecidableEq α] (r : TRE α) :
     (compile r).lang = TRE.lang r := by
   induction r with
@@ -75,7 +101,7 @@ theorem compile_correct [DecidableEq α] (r : TRE α) :
   | concat r s ihr ihs =>
       rw [show (compile (TRE.concat r s)).lang =
           (concatTA (compile r).aut (compile s).aut).lang by rfl,
-        concat_correct]
+        concat_correct (hB := compile_guardsClosed s)]
       rw [show (compile r).aut.lang = (compile r).lang by rfl,
         show (compile s).aut.lang = (compile s).lang by rfl,
         ihr, ihs]

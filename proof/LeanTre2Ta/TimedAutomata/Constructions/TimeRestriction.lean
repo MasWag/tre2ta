@@ -472,4 +472,24 @@ theorem timeRestrict_correct (A : Automaton Loc α) (I : Interval) :
       {w | w ∈ A.lang ∧ Interval.mem (TimedWord.duration w) I} :=
   Set.Subset.antisymm (timeRestrict_sound A I) (timeRestrict_complete A I)
 
+theorem timeRestrict_guardsClosed
+    {A : Automaton Loc α} {I : Interval}
+    (hA : guardsClosed A) :
+    guardsClosed (timeRestrictTA A I) := by
+  intro t ht g hg
+  rcases ht with hshift | hacc
+  · rcases hshift with ⟨tA, htA, rfl⟩
+    rcases List.mem_map.mp (by simpa [shiftTransition] using hg) with
+      ⟨gA, hgA, rfl⟩
+    exact Or.inr ⟨gA.clock, hA tA htA gA hgA, rfl⟩
+  · rcases hacc with ⟨tA, htA, htacc, rfl⟩
+    have hg' : g ∈ tA.guards.map shiftGuard ++ [timeGuard I] := by
+      simpa [acceptingTransition] using hg
+    rcases List.mem_append.mp hg' with hgmap | hgtime
+    · rcases List.mem_map.mp hgmap with ⟨gA, hgA, rfl⟩
+      exact Or.inr ⟨gA.clock, hA tA htA gA hgA, rfl⟩
+    · simp at hgtime
+      subst hgtime
+      exact Or.inl rfl
+
 end LeanTre2Ta

@@ -6,39 +6,26 @@ namespace LeanTre2Ta
 def acceptsEmpty (A : Automaton Loc α) : Prop :=
   [] ∈ A.lang
 
-def concatRightClock (x : Clock) : Clock := 2 * x + 1
-
-def concatRenameGuard (g : Guard) : Guard :=
-  { clock := concatRightClock g.clock
-    interval := g.interval }
-
-def concatRenameResets (rs : Set Clock) : Set Clock :=
-  concatRightClock '' rs
-
-def concatRightVal (v : Valuation) : Valuation :=
-  fun x => v (concatRightClock x)
-
-def concatRightResetSet : Set Clock :=
-  concatRenameResets Set.univ
-
-/- A concatenation construction with tagged locations and a separated right
-   clock namespace.  The switching transition consumes the event that completes
-   the left component and resets the right-clock namespace before entering an
-   initial right state, matching the Rust construction's handoff discipline. -/
-def switchTransition (t : Transition Loc₁ α) (q : Loc₂) :
+/- A concatenation construction with tagged locations and a shared clock
+   namespace.  This matches the Rust construction's clock discipline: the
+   right component is not shifted into a separate namespace, and the switching
+   transition resets the clocks declared by the right automaton.  Correctness
+   therefore uses `guardsClosed B`, ensuring right guards only inspect those
+   reset right clocks. -/
+def switchTransition (B : Automaton Loc₂ α) (t : Transition Loc₁ α) (q : Loc₂) :
     Transition (Sum Loc₁ Loc₂) α :=
   { source := Sum.inl t.source
     label := t.label
     guards := t.guards
-    resets := t.resets ∪ concatRightResetSet
+    resets := t.resets ∪ B.clocks
     target := Sum.inr q }
 
 def concatRightTransition (t : Transition Loc₂ α) :
     Transition (Sum Loc₁ Loc₂) α :=
   { source := Sum.inr t.source
     label := t.label
-    guards := t.guards.map concatRenameGuard
-    resets := concatRenameResets t.resets
+    guards := t.guards
+    resets := t.resets
     target := Sum.inr t.target }
 
 def concatTA (A : Automaton Loc₁ α) (B : Automaton Loc₂ α) :
@@ -52,72 +39,12 @@ def concatTA (A : Automaton Loc₁ α) (B : Automaton Loc₂ α) :
     accepting :=
       {q | ∃ p ∈ B.accepting, q = Sum.inr p} ∪
       {q | acceptsEmpty B ∧ ∃ p ∈ A.accepting, q = Sum.inl p}
-    clocks := A.clocks ∪ concatRenameResets B.clocks
+    clocks := A.clocks ∪ B.clocks
     transitions :=
       (mapTransition Sum.inl '' A.transitions) ∪
       ((concatRightTransition (Loc₁ := Loc₁) '' B.transitions) ∪
         {u | ∃ t ∈ A.transitions, t.target ∈ A.accepting ∧
-          ∃ q₀ ∈ B.initial, u = switchTransition t q₀}) }
-
-theorem concatRightClock_injective : Function.Injective concatRightClock := by
-  intro x y h
-  have hmul : 2 * x = 2 * y := Nat.succ.inj h
-  exact Nat.eq_of_mul_eq_mul_left (by decide : 0 < 2) hmul
-
-theorem concatRightClock_mem_resets {rs : Set Clock} {x : Clock} :
-    concatRightClock x ∈ concatRenameResets rs ↔ x ∈ rs := by
-  constructor
-  · intro h
-    rcases h with ⟨y, hy, hxy⟩
-    have hyx : y = x := concatRightClock_injective hxy
-    cases hyx
-    exact hy
-  · intro hx
-    exact ⟨x, hx, rfl⟩
-
-theorem concatRightVal_zero :
-    concatRightVal zeroVal = zeroVal := by
-  ext x
-  rfl
-
-theorem concatRightVal_delay (d : ℝ) (v : Valuation) :
-    concatRightVal (delayVal d v) = delayVal d (concatRightVal v) := by
-  ext x
-  rfl
-
-theorem concatRightVal_reset_right (rs : Set Clock) (v : Valuation) :
-    concatRightVal (resetVal (concatRenameResets rs) v) =
-      resetVal rs (concatRightVal v) := by
-  ext x
-  by_cases hx : x ∈ rs
-  · have hmem : concatRightClock x ∈ concatRenameResets rs :=
-      (concatRightClock_mem_resets).2 hx
-    simp [concatRightVal, resetVal, hx, hmem]
-  · have hnot : concatRightClock x ∉ concatRenameResets rs := by
-      intro hmem
-      exact hx ((concatRightClock_mem_resets).1 hmem)
-    simp [concatRightVal, resetVal, hx, hnot]
-
-theorem concatRightVal_reset_switch (rs : Set Clock) (v : Valuation) :
-    concatRightVal (resetVal (rs ∪ concatRightResetSet) v) = zeroVal := by
-  ext x
-  have hmem : concatRightClock x ∈ rs ∪ concatRightResetSet := by
-    right
-    exact ⟨x, by simp, rfl⟩
-  simp [concatRightVal, resetVal, zeroVal, hmem]
-
-theorem guardsSat_concatRename_right {v : Valuation} {gs : List Guard} :
-    guardsSat v (gs.map concatRenameGuard) ↔ guardsSat (concatRightVal v) gs := by
-  constructor
-  · intro h g hg
-    have hmem : concatRenameGuard g ∈ gs.map concatRenameGuard :=
-      List.mem_map.mpr ⟨g, hg, rfl⟩
-    have hs := h (concatRenameGuard g) hmem
-    simpa [Guard.sat, concatRenameGuard, concatRightVal] using hs
-  · intro h g hg
-    rcases List.mem_map.mp hg with ⟨g₀, hg₀, rfl⟩
-    have hs := h g₀ hg₀
-    simpa [Guard.sat, concatRenameGuard, concatRightVal] using hs
+          ∃ q₀ ∈ B.initial, u = switchTransition B t q₀}) }
 
 theorem runFrom_nil_inv
     {A : Automaton Loc α} {q qf : Loc} {v vf : Valuation}
@@ -173,22 +100,23 @@ theorem runFrom_left_lift_concat
 
 theorem runFrom_right_lift_concat
     {A : Automaton Loc₁ α} {B : Automaton Loc₂ α}
+    (hB : guardsClosed B)
     {p q : Loc₂} {v vf : Valuation} {w : TimedWord α}
     (h : RunFrom B p v w q vf) {V : Valuation}
-    (hV : concatRightVal V = v) :
-    ∃ VF, concatRightVal VF = vf ∧
+    (hV : agreeOn B.clocks V v) :
+    ∃ VF, agreeOn B.clocks VF vf ∧
       RunFrom (concatTA A B) (Sum.inr p) V w (Sum.inr q) VF := by
   induction h generalizing V with
   | nil q v =>
       exact ⟨V, hV, RunFrom.nil (concatTA A B) (Sum.inr q) V⟩
   | cons t ht hsource hlabel hnonneg hguards htail ih =>
       rename_i p0 q0 v0 vf0 d a wTail
-      let VNext := resetVal (concatRenameResets t.resets) (delayVal d V)
+      let VNext := resetVal t.resets (delayVal d V)
       have hVNext :
-          concatRightVal VNext =
-            resetVal t.resets (delayVal d v0) := by
+          agreeOn B.clocks VNext
+            (resetVal t.resets (delayVal d v0)) := by
         dsimp [VNext]
-        rw [concatRightVal_reset_right, concatRightVal_delay, hV]
+        exact agreeOn_reset (agreeOn_delay hV d)
       rcases ih hVNext with ⟨VF, hVF, htailLift⟩
       refine ⟨VF, hVF, ?_⟩
       exact RunFrom.cons (concatRightTransition (Loc₁ := Loc₁) t)
@@ -200,26 +128,26 @@ theorem runFrom_right_lift_concat
         (by simp [concatRightTransition, hlabel])
         hnonneg
         (by
-          apply guardsSat_concatRename_right.mpr
-          have hv : concatRightVal (delayVal d V) = delayVal d v0 := by
-            rw [concatRightVal_delay, hV]
-          simpa [hv] using hguards)
+          exact (guardsSat_congr_agreeOn (hB t ht)
+            (agreeOn_delay hV d)).mpr hguards)
         (by
           dsimp [VNext] at htailLift
           simpa [concatRightTransition] using htailLift)
 
 theorem runFrom_right_project_aux
     {A : Automaton Loc₁ α} {B : Automaton Loc₂ α}
+    (hB : guardsClosed B)
     {qstart qend : Sum Loc₁ Loc₂} {p q : Loc₂}
-    {v vf : Valuation} {w : TimedWord α}
+    {v vf vB : Valuation} {w : TimedWord α}
     (h : RunFrom (concatTA A B) qstart v w qend vf)
-    (hstart : qstart = Sum.inr p) (hend : qend = Sum.inr q) :
-    RunFrom B p (concatRightVal v) w q (concatRightVal vf) := by
-  induction h generalizing p q with
+    (hstart : qstart = Sum.inr p) (hend : qend = Sum.inr q)
+    (hV : agreeOn B.clocks v vB) :
+    ∃ vfB, agreeOn B.clocks vf vfB ∧ RunFrom B p vB w q vfB := by
+  induction h generalizing p q vB with
   | nil x v =>
       cases hstart
       cases hend
-      exact RunFrom.nil B p (concatRightVal v)
+      exact ⟨vB, hV, RunFrom.nil B p vB⟩
   | cons t ht hsource hlabel hnonneg hguards htail ih =>
       rename_i x y v0 vf0 d a wTail
       cases ht with
@@ -235,17 +163,27 @@ theorem runFrom_right_project_aux
               have hp : p = tB.source := by
                 simpa [concatRightTransition, hstart] using hsource.symm
               subst hp
+              let vBNext := resetVal tB.resets (delayVal d vB)
+              have hNext :
+                  agreeOn B.clocks
+                    (resetVal (concatRightTransition (Loc₁ := Loc₁) tB).resets
+                      (delayVal d v0))
+                    vBNext := by
+                dsimp [vBNext]
+                simpa [concatRightTransition] using
+                  (agreeOn_reset (agreeOn_delay hV d))
+              rcases ih rfl hend hNext with ⟨vfB, hVF, htailB⟩
+              refine ⟨vfB, hVF, ?_⟩
               exact RunFrom.cons tB htB rfl
                 (by simpa [concatRightTransition] using hlabel)
                 hnonneg
                 (by
-                  have hg := guardsSat_concatRename_right.mp
-                    (by simpa [concatRightTransition] using hguards)
-                  simpa [concatRightVal_delay] using hg)
+                  exact (guardsSat_congr_agreeOn (hB tB htB)
+                    (agreeOn_delay hV d)).mp
+                    (by simpa [concatRightTransition] using hguards))
                 (by
-                  have htailProj := ih rfl hend
-                  simpa [concatRightTransition, concatRightVal_delay,
-                    concatRightVal_reset_right] using htailProj)
+                  dsimp [vBNext] at htailB
+                  exact htailB)
           | inr hswitch =>
               rcases hswitch with ⟨tA, htA, htacc, q₀, hq₀, htEq⟩
               subst htEq
@@ -253,10 +191,11 @@ theorem runFrom_right_project_aux
 
 theorem runFrom_right_project
     {A : Automaton Loc₁ α} {B : Automaton Loc₂ α}
-    {p q : Loc₂} {v vf : Valuation} {w : TimedWord α}
-    (h : RunFrom (concatTA A B) (Sum.inr p) v w (Sum.inr q) vf) :
-    RunFrom B p (concatRightVal v) w q (concatRightVal vf) :=
-  runFrom_right_project_aux h rfl rfl
+    (hB : guardsClosed B)
+    {p q : Loc₂} {vf : Valuation} {w : TimedWord α}
+    (h : RunFrom (concatTA A B) (Sum.inr p) zeroVal w (Sum.inr q) vf) :
+    ∃ vfB, agreeOn B.clocks vf vfB ∧ RunFrom B p zeroVal w q vfB :=
+  runFrom_right_project_aux hB h rfl rfl (agreeOn_refl B.clocks zeroVal)
 
 theorem runFrom_right_to_left_false_aux
     {A : Automaton Loc₁ α} {B : Automaton Loc₂ α}
@@ -329,8 +268,7 @@ theorem runFrom_left_project_aux
           | inr hswitch =>
               rcases hswitch with ⟨tA, htA, htacc, q₀, hq₀, htEq⟩
               subst htEq
-              have htailFalse :
-                  False :=
+              have htailFalse : False :=
                 runFrom_right_to_left_false_aux htail rfl hend
               exact False.elim htailFalse
 
@@ -341,16 +279,27 @@ theorem runFrom_left_project
     RunFrom A p v w q vf :=
   runFrom_left_project_aux h rfl rfl
 
+theorem switch_agrees_zero_on_right
+    {B : Automaton Loc₂ α} (t : Transition Loc₁ α) (q : Loc₂)
+    (v : Valuation) :
+    agreeOn B.clocks
+      (resetVal (switchTransition B t q).resets v)
+      zeroVal := by
+  apply agreeOn_reset_of_subset
+  intro x hx
+  exact Or.inr hx
+
 theorem runFrom_left_to_right_decomp_aux
     {A : Automaton Loc₁ α} {B : Automaton Loc₂ α}
+    (hB : guardsClosed B)
     {qstart qend : Sum Loc₁ Loc₂} {p : Loc₁} {q : Loc₂}
     {v vf : Valuation} {w : TimedWord α}
     (h : RunFrom (concatTA A B) qstart v w qend vf)
     (hstart : qstart = Sum.inl p) (hend : qend = Sum.inr q) :
     ∃ u, ∃ qA ∈ A.accepting, ∃ vfA,
-      ∃ qB₀ ∈ B.initial, ∃ vword,
+      ∃ qB₀ ∈ B.initial, ∃ vword, ∃ vfB,
         RunFrom A p v u qA vfA ∧
-        RunFrom B qB₀ zeroVal vword q (concatRightVal vf) ∧
+        RunFrom B qB₀ zeroVal vword q vfB ∧
         w = u ++ vword := by
   induction h generalizing p q with
   | nil x v =>
@@ -366,8 +315,10 @@ theorem runFrom_left_to_right_decomp_aux
             simpa [mapTransition, hstart] using hsource.symm
           subst hp
           rcases ih rfl hend with
-            ⟨u, qA, hqA, vfA, qB₀, hqB₀, vword, hrunA, hrunB, hw⟩
-          refine ⟨(d, a) :: u, qA, hqA, vfA, qB₀, hqB₀, vword, ?_, hrunB, ?_⟩
+            ⟨u, qA, hqA, vfA, qB₀, hqB₀, vword, vfB,
+              hrunA, hrunB, hw⟩
+          refine ⟨(d, a) :: u, qA, hqA, vfA, qB₀, hqB₀,
+            vword, vfB, ?_, hrunB, ?_⟩
           · exact RunFrom.cons tA htA rfl
               (by simpa [mapTransition] using hlabel)
               hnonneg
@@ -386,19 +337,16 @@ theorem runFrom_left_to_right_decomp_aux
               have hp : p = tA.source := by
                 simpa [switchTransition, hstart] using hsource.symm
               subst hp
-              have htailB :
-                  RunFrom B qB₀ zeroVal wTail q (concatRightVal vf0) := by
-                have hproj := runFrom_right_project_aux htail rfl hend
-                have hzero :
-                    concatRightVal
-                      (resetVal (switchTransition tA qB₀).resets (delayVal d v0)) =
-                      zeroVal := by
-                  simpa [switchTransition] using
-                    concatRightVal_reset_switch tA.resets (delayVal d v0)
-                simpa [hzero] using hproj
+              have hzero :
+                  agreeOn B.clocks
+                    (resetVal (switchTransition B tA qB₀).resets (delayVal d v0))
+                    zeroVal :=
+                switch_agrees_zero_on_right tA qB₀ (delayVal d v0)
+              rcases runFrom_right_project_aux hB htail rfl hend hzero with
+                ⟨vfB, hVF, htailB⟩
               refine ⟨[(d, a)], tA.target, htacc,
                 resetVal tA.resets (delayVal d v0),
-                qB₀, hqB₀, wTail, ?_, htailB, ?_⟩
+                qB₀, hqB₀, wTail, vfB, ?_, htailB, ?_⟩
               · exact RunFrom.cons tA htA rfl
                   (by simpa [switchTransition] using hlabel)
                   hnonneg
@@ -409,14 +357,15 @@ theorem runFrom_left_to_right_decomp_aux
 
 theorem runFrom_left_to_right_decomp
     {A : Automaton Loc₁ α} {B : Automaton Loc₂ α}
+    (hB : guardsClosed B)
     {p : Loc₁} {q : Loc₂} {vf : Valuation} {w : TimedWord α}
     (hinit : p ∈ A.initial) (hacc : q ∈ B.accepting)
     (h : RunFrom (concatTA A B) (Sum.inl p) zeroVal w (Sum.inr q) vf) :
     ∃ u ∈ A.lang, ∃ vword ∈ B.lang, w = u ++ vword := by
-  rcases runFrom_left_to_right_decomp_aux h rfl rfl with
-    ⟨u, qA, hqA, vfA, qB₀, hqB₀, vword, hrunA, hrunB, hw⟩
+  rcases runFrom_left_to_right_decomp_aux hB h rfl rfl with
+    ⟨u, qA, hqA, vfA, qB₀, hqB₀, vword, vfB, hrunA, hrunB, hw⟩
   exact ⟨u, ⟨p, hinit, qA, hqA, vfA, hrunA⟩,
-    vword, ⟨qB₀, hqB₀, q, hacc, concatRightVal vf, hrunB⟩, hw⟩
+    vword, ⟨qB₀, hqB₀, q, hacc, vfB, hrunB⟩, hw⟩
 
 theorem runFrom_A_switch_concat_of_nonempty
     {A : Automaton Loc₁ α} {B : Automaton Loc₂ α}
@@ -425,7 +374,7 @@ theorem runFrom_A_switch_concat_of_nonempty
     (hnonempty : w ≠ [])
     (hacc : q ∈ A.accepting)
     (qB : Loc₂) (hqB : qB ∈ B.initial) :
-    ∃ V, concatRightVal V = zeroVal ∧
+    ∃ V, agreeOn B.clocks V zeroVal ∧
       RunFrom (concatTA A B) (Sum.inl p) v w (Sum.inr qB) V := by
   induction h generalizing qB with
   | nil q v =>
@@ -440,13 +389,12 @@ theorem runFrom_A_switch_concat_of_nonempty
         subst vf0
         have htacc : t.target ∈ A.accepting := hacc
         let V :=
-          resetVal (switchTransition t qB).resets (delayVal d v0)
+          resetVal (switchTransition B t qB).resets (delayVal d v0)
         refine ⟨V, ?_, ?_⟩
         · dsimp [V]
-          simpa [switchTransition] using
-            concatRightVal_reset_switch t.resets (delayVal d v0)
+          exact switch_agrees_zero_on_right t qB (delayVal d v0)
         · exact
-            RunFrom.cons (switchTransition t qB)
+            RunFrom.cons (switchTransition B t qB)
               (by
                 right
                 right
@@ -457,14 +405,14 @@ theorem runFrom_A_switch_concat_of_nonempty
               (by simpa [switchTransition] using hguards)
               (by
                 show RunFrom (concatTA A B)
-                  (switchTransition t qB).target
-                  (resetVal (switchTransition t qB).resets (delayVal d v0))
+                  (switchTransition B t qB).target
+                  (resetVal (switchTransition B t qB).resets (delayVal d v0))
                   [] (Sum.inr qB)
-                    (resetVal (switchTransition t qB).resets (delayVal d v0))
+                    (resetVal (switchTransition B t qB).resets (delayVal d v0))
                 simpa [switchTransition] using
                   (RunFrom.nil (concatTA A B)
-                    (switchTransition t qB).target
-                    (resetVal (switchTransition t qB).resets (delayVal d v0))))
+                    (switchTransition B t qB).target
+                    (resetVal (switchTransition B t qB).resets (delayVal d v0))))
       · rcases ih htail_empty hacc qB hqB with ⟨V, hV, hrun⟩
         refine ⟨V, hV, ?_⟩
         exact RunFrom.cons (mapTransition Sum.inl t)
@@ -478,7 +426,8 @@ theorem runFrom_A_switch_concat_of_nonempty
           hrun
 
 theorem concat_complete
-    (A : Automaton Loc₁ α) (B : Automaton Loc₂ α) :
+    (A : Automaton Loc₁ α) (B : Automaton Loc₂ α)
+    (hB : guardsClosed B) :
     concatLang A.lang B.lang ⊆ (concatTA A B).lang := by
   intro w h
   rcases h with ⟨u, hu, vword, hv, rfl⟩
@@ -488,8 +437,8 @@ theorem concat_complete
   · subst u
     have hAempty : acceptsEmpty A :=
       ⟨p₀, hp₀, pf, hpf, vfA, hrunA⟩
-    rcases runFrom_right_lift_concat (A := A) hrunB
-        (V := zeroVal) concatRightVal_zero with
+    rcases runFrom_right_lift_concat (A := A) hB hrunB
+        (V := zeroVal) (agreeOn_refl B.clocks zeroVal) with
       ⟨VF, hVF, hrunLift⟩
     refine ⟨Sum.inr q₀, ?_, Sum.inr qf, ?_, VF, ?_⟩
     · right
@@ -511,7 +460,7 @@ theorem concat_complete
         runFrom_A_switch_concat_of_nonempty (A := A) (B := B)
           hrunA hu_empty hpf q₀ hq₀
       rcases hswitch with ⟨Vswitch, hVswitch, hrunSwitch⟩
-      rcases runFrom_right_lift_concat (A := A) hrunB
+      rcases runFrom_right_lift_concat (A := A) hB hrunB
           (V := Vswitch) hVswitch with
         ⟨VF, hVF, hrunRight⟩
       refine ⟨Sum.inl p₀, ?_, Sum.inr qf, ?_, VF, ?_⟩
@@ -522,7 +471,8 @@ theorem concat_complete
       · exact runFrom_append hrunSwitch hrunRight
 
 theorem concat_sound
-    (A : Automaton Loc₁ α) (B : Automaton Loc₂ α) :
+    (A : Automaton Loc₁ α) (B : Automaton Loc₂ α)
+    (hB : guardsClosed B) :
     (concatTA A B).lang ⊆ concatLang A.lang B.lang := by
   intro w h
   rcases h with ⟨q₀, hq₀, qf, hqf, vf, hrun⟩
@@ -560,7 +510,7 @@ theorem concat_sound
               exact hq
             · rcases hleftAcc with ⟨_, p, hp, hbad⟩
               cases hbad
-          exact runFrom_left_to_right_decomp hp₀ hqfB hrun
+          exact runFrom_left_to_right_decomp hB hp₀ hqfB hrun
   | inr q₀B =>
       have hAempty : acceptsEmpty A := by
         rcases hq₀ with hleft | hright
@@ -585,16 +535,30 @@ theorem concat_sound
               exact hq
             · rcases hleftAcc with ⟨_, p, hp, hbad⟩
               cases hbad
-          have hrunB := runFrom_right_project hrun
+          rcases runFrom_right_project hB hrun with ⟨vfB, hVF, hrunB⟩
           exact ⟨[], hAempty, w,
-            ⟨q₀B, hq₀B, qfB, hqfB, concatRightVal vf,
-              by simpa [concatRightVal_zero] using hrunB⟩,
+            ⟨q₀B, hq₀B, qfB, hqfB, vfB, hrunB⟩,
             by simp⟩
 
 theorem concat_correct
-    (A : Automaton Loc₁ α) (B : Automaton Loc₂ α) :
+    (A : Automaton Loc₁ α) (B : Automaton Loc₂ α)
+    (hB : guardsClosed B) :
     (concatTA A B).lang = concatLang A.lang B.lang :=
-  Set.Subset.antisymm (concat_sound A B) (concat_complete A B)
+  Set.Subset.antisymm (concat_sound A B hB) (concat_complete A B hB)
+
+theorem concat_guardsClosed
+    {A : Automaton Loc₁ α} {B : Automaton Loc₂ α}
+    (hA : guardsClosed A) (hB : guardsClosed B) :
+    guardsClosed (concatTA A B) := by
+  intro t ht g hg
+  rcases ht with hleft | hrest
+  · rcases hleft with ⟨tA, htA, rfl⟩
+    exact Or.inl (hA tA htA g (by simpa [mapTransition] using hg))
+  · rcases hrest with hright | hswitch
+    · rcases hright with ⟨tB, htB, rfl⟩
+      exact Or.inr (hB tB htB g (by simpa [concatRightTransition] using hg))
+    · rcases hswitch with ⟨tA, htA, htacc, q₀, hq₀, rfl⟩
+      exact Or.inl (hA tA htA g (by simpa [switchTransition] using hg))
 
 theorem concatLang_assoc (L₁ L₂ L₃ : Set (TimedWord α)) :
     concatLang (concatLang L₁ L₂) L₃ =

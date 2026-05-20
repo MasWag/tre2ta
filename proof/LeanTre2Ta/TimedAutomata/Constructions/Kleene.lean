@@ -212,6 +212,15 @@ theorem plus_correct (A : Automaton Loc α) :
     (plusTA A).lang = plusLang A.lang :=
   Set.Subset.antisymm (plus_sound A) (plus_complete A)
 
+theorem plus_guardsClosed {A : Automaton Loc α}
+    (hA : guardsClosed A) :
+    guardsClosed (plusTA A) := by
+  intro t ht g hg
+  rcases ht with htA | hrestart
+  · exact hA t htA g hg
+  · rcases hrestart with ⟨tA, htA, htacc, q₀, hq₀, rfl⟩
+    exact hA tA htA g (by simpa [restartTransition] using hg)
+
 def starTA (A : Automaton Loc α) : Automaton (Sum Nat Loc) α :=
   unionTaggedTA (epsilonTA α) (plusTA A)
 
@@ -219,5 +228,11 @@ theorem star_correct (A : Automaton Loc α) :
     (starTA A).lang = starLang A.lang := by
   rw [starTA, unionTagged_correct, epsilonTA_lang, plus_correct,
     starLang_empty_union_plus]
+
+theorem star_guardsClosed {A : Automaton Loc α}
+    (hA : guardsClosed A) :
+    guardsClosed (starTA A) := by
+  rw [starTA]
+  exact unionTagged_guardsClosed epsilonTA_guardsClosed (plus_guardsClosed hA)
 
 end LeanTre2Ta

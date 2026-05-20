@@ -141,6 +141,23 @@ theorem epsilonTA_lang_eq_singleton :
 theorem atomTA_lang_eq (a : α) :
     (atomTA a).lang = {w | ∃ d, 0 ≤ d ∧ w = [(d, a)]} := atomTA_lang a
 
+theorem emptyTA_guardsClosed :
+    guardsClosed (emptyTA α) := by
+  intro t ht
+  simp [emptyTA] at ht
+
+theorem epsilonTA_guardsClosed :
+    guardsClosed (epsilonTA α) := by
+  intro t ht
+  simp [epsilonTA] at ht
+
+theorem atomTA_guardsClosed (a : α) :
+    guardsClosed (atomTA a) := by
+  intro t ht g hg
+  have ht' : t = atomTransition a := by simpa [atomTA] using ht
+  subst t
+  simp [atomTransition] at hg
+
 theorem atomTA_wellFormed {a : α} {w : TimedWord α}
     (h : w ∈ (atomTA a).lang) : TimedWord.WellFormed w := by
   have h' : w ∈ {w | ∃ d, 0 ≤ d ∧ w = [(d, a)]} := by

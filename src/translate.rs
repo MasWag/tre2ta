@@ -275,13 +275,12 @@ where
     let left_accepting = accepting_location_ids(&left);
     let left_accepts_empty = accepts_empty_word(&left);
     let location_offset = left.locations.len();
-    let clock_offset = left.num_clocks;
     let right_initial_locations: Vec<usize> = right
         .initial_locations
         .iter()
         .map(|id| id + location_offset)
         .collect();
-    let right_clock_resets = clock_range(clock_offset, right.num_clocks);
+    let right_clock_resets = clock_range(0, right.num_clocks);
 
     for location in &mut left.locations {
         if left_accepting.contains(&location.id) {
@@ -301,7 +300,7 @@ where
     let shifted_right_transitions: Vec<Transition<L>> = right
         .transitions
         .into_iter()
-        .map(|transition| shift_transition(&transition, location_offset, clock_offset))
+        .map(|transition| shift_transition(&transition, location_offset, 0))
         .collect();
 
     let redirected_transitions: Vec<Transition<L>> = left
@@ -335,7 +334,7 @@ where
     let automaton = TimedAutomaton {
         locations,
         initial_locations,
-        num_clocks: left.num_clocks + right.num_clocks,
+        num_clocks: left.num_clocks.max(right.num_clocks),
         transitions,
     };
     debug_assert_well_formed(&automaton);

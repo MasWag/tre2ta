@@ -151,6 +151,7 @@ fn translates_concatenation_with_redirected_handoff() {
     let automaton = translate(&parse("a ; b").unwrap()).unwrap();
 
     assert_well_formed(&automaton);
+    assert_eq!(automaton.num_clocks, 0);
     assert_eq!(automaton.locations.len(), 3);
     assert_eq!(automaton.initial_locations, vec![0]);
     assert!(!automaton.locations[1].accepting);
@@ -159,6 +160,39 @@ fn translates_concatenation_with_redirected_handoff() {
         transition.source == 0
             && transition.target == 1
             && transition.label == Some("a".to_string())
+    }));
+}
+
+#[test]
+fn concatenation_uses_shared_clock_namespace() {
+    let automaton = translate(&TimedRegex::Concat(
+        Box::new(TimedRegex::Within(
+            Box::new(timed_atom(
+                "a",
+                Interval::left_closed_right_open(0, Some(2)).unwrap(),
+            )),
+            Interval::closed(0, Some(5)).unwrap(),
+        )),
+        Box::new(timed_atom(
+            "b",
+            Interval {
+                lower: 1,
+                upper: None,
+                lower_inclusive: true,
+                upper_inclusive: false,
+            },
+        )),
+    ))
+    .unwrap();
+
+    assert_well_formed(&automaton);
+    assert_eq!(automaton.num_clocks, 2);
+    assert!(automaton.transitions.iter().any(|transition| {
+        transition.label == Some("a".to_string()) && transition.resets == vec![0]
+    }));
+    assert!(automaton.transitions.iter().any(|transition| {
+        transition.label == Some("b".to_string())
+            && transition.guards == vec![ClockConstraint::GreaterEqual { clock: 0, bound: 1 }]
     }));
 }
 
@@ -292,7 +326,7 @@ fn translates_composed_timed_subexpressions_as_well_formed_automata() {
     ))
     .unwrap();
     assert_well_formed(&concatenated);
-    assert_eq!(concatenated.num_clocks, 2);
+    assert_eq!(concatenated.num_clocks, 1);
 
     let plus = translate(&TimedRegex::KleenePlus(Box::new(timed_atom(
         "a",

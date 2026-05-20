@@ -396,4 +396,20 @@ theorem product_correct_eq [DecidableEq α]
     product_correct (alg := LabelAlgebra.equality (α := α)) A B,
     Automaton.langL_eq_lang A, Automaton.langL_eq_lang B]
 
+theorem product_guardsClosed {alg : LabelAlgebra Label Event}
+    {A : Automaton Loc₁ Label} {B : Automaton Loc₂ Label}
+    (hA : guardsClosed A) (hB : guardsClosed B) :
+    guardsClosed (productTA alg A B) := by
+  intro t ht g hg
+  rcases ht with ⟨t₁, ht₁, t₂, ht₂, l, hi, rfl⟩
+  have hg' :
+      g ∈ t₁.guards.map (renameGuard leftClock) ++
+        t₂.guards.map (renameGuard rightClock) := by
+    simpa [productTransition] using hg
+  rcases List.mem_append.mp hg' with hleft | hright
+  · rcases List.mem_map.mp hleft with ⟨g₁, hg₁, rfl⟩
+    exact Or.inl ⟨g₁.clock, hA t₁ ht₁ g₁ hg₁, rfl⟩
+  · rcases List.mem_map.mp hright with ⟨g₂, hg₂, rfl⟩
+    exact Or.inr ⟨g₂.clock, hB t₂ ht₂ g₂ hg₂, rfl⟩
+
 end LeanTre2Ta

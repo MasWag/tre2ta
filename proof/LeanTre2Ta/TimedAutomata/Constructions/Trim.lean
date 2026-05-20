@@ -139,4 +139,10 @@ theorem trim_correct (A : Automaton Loc Label) :
     (trimToAccepting A).lang = A.lang :=
   Set.Subset.antisymm (trim_lang_subset A) (original_lang_subset_trim A)
 
+theorem trim_guardsClosed {A : Automaton Loc Label}
+    (hA : guardsClosed A) :
+    guardsClosed (trimToAccepting A) := by
+  intro t ht
+  exact hA t ht.1
+
 end LeanTre2Ta

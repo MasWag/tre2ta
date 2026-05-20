@@ -181,8 +181,8 @@ The conceptual product is the Cartesian product, but the code constructs only re
 `concatenate(A1, A2)` starts in the left operand and may hand off to the right operand whenever a left transition enters a left accepting location.
 
 - The right operand is copied with location ids shifted by `|Q1|`.
-- The right clocks are shifted by `k1`.
-- The resulting clock dimension is `k1 + k2`.
+- Clock indices are shared between the two operands.
+- The resulting clock dimension is `max(k1, k2)`.
 - Every original transition of both operands is kept.
 
 For each left transition
@@ -194,10 +194,10 @@ p --(l, g, R)--> f
 with `f` accepting in `A1`, and for each initial state `q0 ∈ Q0^2`, the construction adds
 
 ```text
-p --(l, g, R ∪ shift(C2))--> q0.
+p --(l, g, R ∪ C2)--> q0.
 ```
 
-Thus entering the right factor resets all right-side clocks.
+Thus entering the right factor resets the clocks used by the right operand.
 
 All former accepting locations of the left factor are then made non-accepting.
 If `A1` accepts the empty timed word, the shifted initial locations of `A2` are also initial in the result.
