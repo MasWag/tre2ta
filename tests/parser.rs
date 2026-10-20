@@ -240,6 +240,42 @@ fn rejects_invalid_intervals_during_parsing() {
 }
 
 #[test]
+fn overflowing_bounds_return_parse_errors() {
+    for input in [
+        "a%[18446744073709551616,inf)",
+        "a%[0,18446744073709551616]",
+        "a%(>18446744073709551616)",
+        "a%(<18446744073709551616)",
+    ] {
+        assert_parse_error(input);
+        match parse_with(input, parse_test_label) {
+            Err(Error::Parse(message)) => assert!(!message.is_empty()),
+            other => panic!("expected parse error for {input:?}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn accepts_maximum_u64_bounds() {
+    for (input, bounds) in [
+        (
+            "a%[18446744073709551615,inf)",
+            interval(u64::MAX, None, true, false),
+        ),
+        (
+            "a%[0,18446744073709551615]",
+            interval(0, Some(u64::MAX), true, true),
+        ),
+    ] {
+        assert_eq!(parse(input).unwrap(), within(atom("a"), bounds.clone()));
+        assert_eq!(
+            parse_with(input, parse_test_label).unwrap(),
+            TimedRegex::Within(Box::new(label_atom(TestLabel::A)), bounds)
+        );
+    }
+}
+
+#[test]
 fn parse_with_supports_custom_labels() {
     assert_eq!(
         parse_with("a & b", parse_test_label).unwrap(),

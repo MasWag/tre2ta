@@ -106,7 +106,7 @@ Atom: L = {
 };
 
 Number: u64 = {
-    <s:r"[0-9]+"> => u64::from_str(s).unwrap(),
+    <s:r"[0-9]+"> =>? Ok(u64::from_str(s).map_err(|error| error.to_string())?),
 };
 
 Bound: Option<u64> = {

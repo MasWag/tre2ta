@@ -31,7 +31,7 @@ lalrpop_util::lalrpop_mod!(
     #[doc = "Generated LALRPOP parser for the crate's textual TRE syntax."]
     #[doc = ""]
     #[doc = "Most users should prefer the higher-level [`parse`] helper."]
-    pub parser
+    parser
 );
 
 pub use dot::to_dot;

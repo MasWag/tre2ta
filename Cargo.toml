@@ -2,7 +2,17 @@
 name = "tre2ta"
 version = "0.1.1"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.86"
+include = [
+  "/Cargo.toml",
+  "/build.rs",
+  "/README.md",
+  "/LICENSE-MIT",
+  "/LICENSE-APACHE",
+  "/src/**",
+  "/tests/**",
+  "/doc/construction.md",
+]
 
 description = "A Rust library for translating timed regular expressions into timed automata."
 readme = "README.md"
