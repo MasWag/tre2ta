@@ -102,7 +102,7 @@ IntervalConstraint: Interval = {
 };
 
 Atom: L = {
-    <s:r"[A-Za-z_][A-Za-z0-9_]*"> =>? Ok(parse_label(s)?),
+    <s:r"[A-Za-z_][A-Za-z0-9_]*|\$"> =>? Ok(parse_label(s)?),
 };
 
 Number: u64 = {

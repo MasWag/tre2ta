@@ -88,6 +88,88 @@ fn translates_base_cases() {
 }
 
 #[test]
+fn translates_dollar_as_an_ordinary_labeled_transition() {
+    let automaton = translate(&parse("$").unwrap()).unwrap();
+    assert_well_formed(&automaton);
+    assert_eq!(automaton.num_clocks, 0);
+    assert_eq!(automaton.transitions.len(), 1);
+    assert!(
+        automaton
+            .initial_locations
+            .iter()
+            .all(|&initial| { !automaton.locations[initial].accepting })
+    );
+    let dollar = accepting_transition(&automaton, "$");
+    assert!(automaton.initial_locations.contains(&dollar.source));
+    assert!(dollar.guards.is_empty());
+    assert!(dollar.resets.is_empty());
+}
+
+#[test]
+fn translates_timed_dollar_with_handoff_reset_and_strict_guards() {
+    let automaton = translate(&parse("a ; ($)%(1,20)").unwrap()).unwrap();
+    assert_well_formed(&automaton);
+    assert_eq!(automaton.num_clocks, 1);
+    assert_eq!(automaton.transitions.len(), 2);
+    let a = automaton
+        .transitions
+        .iter()
+        .find(|transition| transition.label.as_deref() == Some("a"))
+        .unwrap();
+    let dollar = accepting_transition(&automaton, "$");
+    assert!(automaton.initial_locations.contains(&a.source));
+    assert_eq!(a.target, dollar.source);
+    assert!(!automaton.locations[a.target].accepting);
+    assert!(a.guards.is_empty());
+    assert_eq!(a.resets.len(), 1);
+    let clock = a.resets[0];
+    assert_eq!(
+        dollar.guards,
+        vec![
+            ClockConstraint::GreaterThan { clock, bound: 1 },
+            ClockConstraint::LessThan { clock, bound: 20 },
+        ]
+    );
+    assert!(dollar.resets.is_empty());
+}
+
+#[test]
+fn translates_outer_timing_restriction_on_final_dollar() {
+    let automaton = translate(&parse("(a ; b ; $)%[1,10]").unwrap()).unwrap();
+    assert_well_formed(&automaton);
+    assert_eq!(automaton.num_clocks, 1);
+    assert_eq!(automaton.transitions.len(), 3);
+    let find_label = |label: &str| {
+        automaton
+            .transitions
+            .iter()
+            .find(|transition| transition.label.as_deref() == Some(label))
+            .unwrap()
+    };
+    let a = find_label("a");
+    let b = find_label("b");
+    let dollar = accepting_transition(&automaton, "$");
+    assert!(automaton.initial_locations.contains(&a.source));
+    assert_eq!(a.target, b.source);
+    assert_eq!(b.target, dollar.source);
+    assert!(!automaton.locations[a.target].accepting);
+    assert!(!automaton.locations[b.target].accepting);
+    assert!(a.guards.is_empty());
+    assert!(b.guards.is_empty());
+    assert!(automaton.transitions.iter().all(|t| t.resets.is_empty()));
+    assert_eq!(
+        dollar.guards,
+        vec![
+            ClockConstraint::GreaterEqual { clock: 0, bound: 1 },
+            ClockConstraint::LessEqual {
+                clock: 0,
+                bound: 10
+            },
+        ]
+    );
+}
+
+#[test]
 fn translates_union_with_disjoint_union_structure() {
     let automaton = translate(&parse("a | b").unwrap()).unwrap();
 

@@ -54,6 +54,7 @@ enum TestLabel {
     A,
     B,
     C,
+    Dollar,
 }
 
 fn label_atom(label: TestLabel) -> TimedRegex<TestLabel> {
@@ -65,6 +66,7 @@ fn parse_test_label(input: &str) -> Result<TestLabel, &'static str> {
         "a" => Ok(TestLabel::A),
         "b" => Ok(TestLabel::B),
         "c" => Ok(TestLabel::C),
+        "$" => Ok(TestLabel::Dollar),
         _ => Err("unknown label"),
     }
 }
@@ -75,6 +77,59 @@ fn parses_literals_and_base_forms() {
     assert_eq!(parse("eps").unwrap(), TimedRegex::Epsilon);
     assert_eq!(parse("empty").unwrap(), TimedRegex::Empty);
     assert_eq!(parse("_foo1").unwrap(), atom("_foo1"));
+}
+
+#[test]
+fn parses_dollar_atoms_and_timing() {
+    assert_eq!(parse("$").unwrap(), atom("$"));
+    assert_eq!(
+        parse("a ; b ; $").unwrap(),
+        concat(concat(atom("a"), atom("b")), atom("$"))
+    );
+    assert_eq!(
+        parse("a ; ($)%(1,20)").unwrap(),
+        concat(
+            atom("a"),
+            within(atom("$"), interval(1, Some(20), false, false))
+        )
+    );
+}
+
+#[test]
+fn parse_with_passes_literal_dollar_to_custom_label_parser() {
+    let mut seen = Vec::new();
+    let expr = parse_with("a ; ($)%(1,20)", |input| {
+        seen.push(input.to_string());
+        parse_test_label(input)
+    })
+    .unwrap();
+
+    assert_eq!(seen, vec!["a", "$"]);
+    assert_eq!(
+        expr,
+        TimedRegex::Concat(
+            Box::new(label_atom(TestLabel::A)),
+            Box::new(TimedRegex::Within(
+                Box::new(label_atom(TestLabel::Dollar)),
+                interval(1, Some(20), false, false)
+            ))
+        )
+    );
+}
+
+#[test]
+fn parse_with_preserves_dollar_callback_errors() {
+    let result = parse_with::<TestLabel, _, _>("$", |input| {
+        assert_eq!(input, "$");
+        Err("dollar rejected")
+    });
+    match result {
+        Err(Error::Parse(message)) => {
+            assert!(message.contains("invalid atom \"$\""));
+            assert!(message.contains("dollar rejected"));
+        }
+        other => panic!("expected parse error, got {other:?}"),
+    }
 }
 
 #[test]

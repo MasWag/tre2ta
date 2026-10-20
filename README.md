@@ -28,6 +28,11 @@ The crate is meant to be a reusable translation layer rather than a model checke
 
 ## TRE Syntax
 
+Atoms are identifiers matching `[A-Za-z_][A-Za-z0-9_]*` or the literal `$`.
+`$` is an ordinary atomic label in `tre2ta`; downstream tools assign any
+special meaning, such as MONAA's end-of-match marker. `parse_with` passes
+the literal `"$"` to the label parser, allowing custom label variants.
+
 Supported operators:
 
 - union: `|`
@@ -42,6 +47,9 @@ Examples:
 ```text
 a
 a ; b
+a ; b ; $
+a ; ($)%(1,20)
+(a ; b ; $)%[1,10]
 a | b
 a & b
 (a ; b)*
@@ -95,6 +103,10 @@ assert_eq!(
 ```
 
 When constructing values manually, prefer `Interval::new(...)` and `TimedAutomaton::new(...)`. If you build AST nodes or automata directly through public fields, call `validate()` before translation or export.
+
+JANI export supports action names matching `[A-Za-z_][A-Za-z0-9_]*` and
+rejects the literal `$` label. Parsing and translation support `$`, but exporting
+such labels to JANI requires a downstream mapping to supported action names.
 
 ## Development
 
