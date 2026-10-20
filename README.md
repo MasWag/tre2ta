@@ -104,9 +104,8 @@ assert_eq!(
 
 When constructing values manually, prefer `Interval::new(...)` and `TimedAutomaton::new(...)`. If you build AST nodes or automata directly through public fields, call `validate()` before translation or export.
 
-JANI export supports action names matching `[A-Za-z_][A-Za-z0-9_]*` and
-rejects the literal `$` label. Parsing and translation support `$`, but exporting
-such labels to JANI requires a downstream mapping to supported action names.
+JANI export supports action names matching `[A-Za-z_][A-Za-z0-9_]*` plus the
+literal `$`. The `$` symbol is preserved across TREs, timed automata, and JANI.
 
 ## Development
 

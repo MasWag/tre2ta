@@ -6,6 +6,20 @@ use tre2ta::{
 const OP_AND: &str = "\u{2227}";
 const OP_LESS_EQUAL: &str = "\u{2264}";
 
+#[test]
+fn exports_dollar_from_timed_tre_without_renaming() {
+    let automaton = translate(&parse("a ; ($)%(1,20)").unwrap()).unwrap();
+    let model = export_value(&automaton);
+    let actions = model["actions"].as_array().unwrap();
+    assert_eq!(actions.len(), 2);
+    assert!(actions.contains(&json!({ "name": "a" })));
+    assert!(actions.contains(&json!({ "name": "$" })));
+    let edges = exported_automaton(&model)["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 2);
+    let dollar = edges.iter().find(|edge| edge["action"] == "$").unwrap();
+    assert!(dollar.get("guard").is_some());
+}
+
 fn export_value<L: std::fmt::Display>(automaton: &TimedAutomaton<L>) -> Value {
     serde_json::from_str(&to_jani(automaton).unwrap()).unwrap()
 }
@@ -354,12 +368,16 @@ fn rejects_action_labels_outside_supported_identifier_subset() {
         }],
     };
 
-    match to_jani(&automaton).unwrap_err() {
-        Error::Export(message) => {
-            assert!(message.contains("not-valid"));
-            assert!(message.contains("[A-Za-z_][A-Za-z0-9_]*"));
+    for label in ["not-valid", "$$", "$a", "a$"] {
+        let mut automaton = automaton.clone();
+        automaton.transitions[0].label = Some(label.to_string());
+        match to_jani(&automaton).unwrap_err() {
+            Error::Export(message) => {
+                assert!(message.contains(label));
+                assert!(message.contains("[A-Za-z_][A-Za-z0-9_]*"));
+            }
+            other => panic!("expected export error, got {other:?}"),
         }
-        other => panic!("expected export error, got {other:?}"),
     }
 }
 

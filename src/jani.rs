@@ -41,7 +41,7 @@ const OP_LESS_EQUAL: &str = "\u{2264}";
 /// Returns [`Error::Export`] when a transition label cannot be represented as a
 /// supported JANI action name, when `automaton` is not structurally well
 /// formed, or if serializing the JSON model fails. The supported action-name
-/// subset is `[A-Za-z_][A-Za-z0-9_]*`.
+/// subset is `[A-Za-z_][A-Za-z0-9_]*` plus the literal `$`.
 pub fn to_jani<L: Display>(automaton: &TimedAutomaton<L>) -> Result<String, Error> {
     automaton.validate()?;
 
@@ -268,7 +268,7 @@ fn action_name<L: Display>(label: &L) -> Result<String, Error> {
 
     if !is_valid_action_name(&action) {
         return Err(Error::Export(format!(
-            "transition label {action:?} cannot be exported as a JANI action name; supported names match [A-Za-z_][A-Za-z0-9_]*"
+            "transition label {action:?} cannot be exported as a JANI action name; supported names match [A-Za-z_][A-Za-z0-9_]* or are the literal $"
         )));
     }
 
@@ -276,6 +276,10 @@ fn action_name<L: Display>(label: &L) -> Result<String, Error> {
 }
 
 fn is_valid_action_name(action: &str) -> bool {
+    if action == "$" {
+        return true;
+    }
+
     let mut chars = action.chars();
     let Some(first) = chars.next() else {
         return false;
