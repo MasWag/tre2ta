@@ -1,162 +1,87 @@
-# Lean TRE-to-TA proof
+# Lean proof of TRE-to-TA translation
 
-This directory contains a Lean 4 port of the self-contained Isabelle/HOL proof
-under `proof/` on the `isabelle` branch of `MasWag/tre2ta`.  The development
-proves the mathematical TRE-to-TA construction; it does not verify the Rust
-implementation itself.
+This directory contains a Lean 4 formalization of the mathematical construction
+of timed automata (TAs) from timed regular expressions (TREs). It proves that
+the compiler preserves the language of a TRE and that trimming locations
+that cannot reach an accepting location preserves that language.
+
+The development verifies the abstract Lean construction, not the Rust
+implementation.
 
 ## Build
 
+From the repository root:
+
 ```sh
-cd proof-lean
+cd proof
 lake build
 ```
 
-The project uses Lean 4.29.1 and mathlib.  A local unfinished-proof check is:
+The Lean toolchain is pinned in [`lean-toolchain`](lean-toolchain), and the
+mathlib dependency is specified in [`lakefile.lean`](lakefile.lean).
+The [Lean Proof workflow](../.github/workflows/lean.yml) builds the project
+and checks that the proofs contain no `sorry` or `admit` placeholders.
 
-```sh
-grep -R "sorry\\|admit" LeanTre2Ta || true
-```
+## Main correctness theorems
 
-In sandboxed environments where `elan` cannot write to its default settings
-file, it may be necessary to invoke the Lake binary from the installed Lean
-toolchain directly.
-
-## Main Theorems
-
-The public compiler packages automata with their location type:
+The compiler returns a `SomeAutomaton`, which packages the automaton together
+with its location type. The central results in
+[`TRE/Compile.lean`](LeanTre2Ta/TRE/Compile.lean) are:
 
 ```lean
-structure SomeAutomaton (α : Type u) where
-  Loc : Type
-  aut : Automaton Loc α
-```
-
-The main correctness theorems are:
-
-```lean
-theorem TRE.compile_correct [DecidableEq α] (r : TRE α) :
+theorem compile_correct [DecidableEq α] (r : TRE α) :
     (compile r).lang = TRE.lang r
 
-theorem TRE.compile_trim_correct [DecidableEq α] (r : TRE α) :
+theorem compile_trim_correct [DecidableEq α] (r : TRE α) :
     (trimToAccepting (compile r).aut).lang = TRE.lang r
 ```
 
-`Automaton.lang` is defined from the operational acceptance relation
-`AcceptsRun`; automata do not contain a stored extensional language field.
+`TRE.lang` defines the language of a TRE recursively, while `Automaton.lang`
+is defined through operational acceptance (`AcceptsRun`). Timed words are
+represented as sequences of nonnegative delays. The compiler theorem covers
+all TRE constructors: `empty`, `epsilon`, `atom`, `union`, `inter`, `concat`,
+`star`, `plus`, and `within`.
 
-## Project Structure
+## Source layout
 
-The Lean development distinguishes between reusable TimedAutomata infrastructure
-and TRE-specific definitions:
+- [`LeanTre2Ta/Basic/`](LeanTre2Ta/Basic/): intervals, delay-based timed words,
+  and language operations.
+- [`LeanTre2Ta/TimedAutomata/`](LeanTre2Ta/TimedAutomata/): timed-automata
+  syntax and run semantics, label algebra, and automaton combinators.
+- [`LeanTre2Ta/TimedAutomata/Constructions/`](LeanTre2Ta/TimedAutomata/Constructions/):
+  trimming, time restriction, concatenation, Kleene closure, and intersection,
+  with their correctness proofs.
+- [`LeanTre2Ta/TRE/`](LeanTre2Ta/TRE/): TRE syntax, language semantics,
+  the recursive compiler, and its correctness proofs.
 
-### TimedAutomata/
+## Construction notes
 
-The `TimedAutomata` namespace contains definition and construction files.
+- **Union** uses tagged locations to keep the two components disjoint.
+- **Concatenation** also uses tagged locations, but *shares* the clock
+  namespace. A switching transition consumes the final event of the left
+  operand and resets the right operand's clocks. The correctness proof uses
+  `guardsClosed` to ensure the right operand only tests its declared clocks.
+- **Kleene plus** duplicates transitions into accepting locations to restart
+  at an initial location. Its Lean reset set is `Set.univ` because clock
+  valuations are total functions; Kleene star adds acceptance of the empty
+  word to this construction.
+- **Time restriction** shifts the operand's clocks by one, reserves clock `0`
+  for elapsed duration, and guards transitions into a new accepting sink.
+  Empty-word acceptance is preserved exactly when the operand accepts the
+  empty word and the interval contains zero.
+- **Intersection** synchronizes transitions in a product automaton, renaming
+  clocks into disjoint even/odd namespaces. `product_correct` proves the
+  construction for a `LabelAlgebra`; `product_correct_eq` specializes it to
+  equality-based labels, as used by `compile`.
+- **Trimming** removes locations from which no accepting location is
+  reachable; `trim_correct` proves language preservation.
 
-- `Interval.lean` - intervals over real-valued durations
-- `TimedWord.lean` - delay-based timed words and their duration
-- `Syntax.lean` - clocks, valuations, guards, transitions, automata
-- `Semantics.lean` - operational run semantics (RunFrom, AcceptsRun, lang)
-- `LabelAlgebra.lean` - label algebra for equality/intersection semantics
-- `Combinators.lean` - generic automaton operations (map, unionTaggedTA)
-- `Constructions/Concat.lean` - concatenation with tagged locations and clock separation
-- `Constructions/Kleene.lean` - Kleene star (epsilon-or-plus) and plus (restart-loop)
-- `Constructions/TimeRestriction.lean` - time restriction with fresh duration clock
-- `Constructions/Intersection.lean` - product construction using label algebra
+## Scope
 
-### TRE/
+The compiler currently uses equality-based label synchronization. Although
+the generic product theorem handles a label algebra, the compiler theorem
+does not formalize application-specific spatial-label semantics or a separate
+terminal-`$` normalization step.
 
-The `TRE` namespace contains timed regular expression definitions and proofs.
-
-- `Syntax.lean` - TRE syntax (Empty, Epsilon, Atom, Union, Intersection, Concat, KleeneStar, KleenePlus, Within)
-- `Semantics.lean` - denotational semantics `tre_lang`
-- `Compile.lean` - TRE-to-TA compiler and correctness theorems
-- `Correctness.lean` - compatibility re-exports for old imports
-
-## What Is Proved
-
-The compiler theorem covers:
-
-- `Empty`
-- `Epsilon`
-- `Atom`
-- `Union`
-- `Intersection`
-- `Concat`
-- `KleeneStar`
-- `KleenePlus`
-- `Within`
-
-The main construction theorems are:
-
-- `emptyTA_lang`
-- `epsilonTA_lang`
-- `atomTA_lang`
-- `unionTagged_correct`
-- `trim_correct`
-- `timeRestrict_correct`
-- `concat_correct`
-- `plus_correct`
-- `star_correct`
-- `product_correct`
-- `product_correct_eq`
-
-## Construction Notes
-
-Union uses tagged locations internally, so the two component automata cannot
-collide at shared location names.
-
-Time restriction shifts the input automaton's clocks by one and reserves clock
-`0` as the fresh duration clock.  Guarded duplicate transitions enter a fresh
-accepting sink when the total elapsed duration is in the interval.  Empty-word
-acceptance is handled by making that sink initial exactly when the original
-automaton accepts `[]` and `0` belongs to the interval.
-
-Concatenation uses tagged locations.  A switching transition consumes the event
-that completes the left component, enters an initial right state, and resets the
-renamed right-clock namespace.  This matches the Rust construction's handoff
-discipline while keeping the Lean clock namespaces separated for the proof.
-
-Kleene plus uses a primitive restart-loop construction.  `plusTA` keeps the
-original automaton and adds duplicate transitions from transitions entering
-accepting states back to initial states.  These duplicate transitions consume
-the same event and reset the semantic clock valuation before the next
-iteration.  In Lean the restart reset set is `Set.univ`, because valuations are
-total functions `Clock → ℝ`; this is the assumption-free analogue of resetting
-all allocated clocks.  Kleene star is defined as epsilon-or-plus.
-
-Intersection is proved using a label-algebraic run semantics.  The generic
-product theorem is `product_correct`; `product_correct_eq` specializes it to
-ordinary equality labels used by the public compiler.  The product construction
-places component clocks into disjoint even/odd namespaces before synchronizing
-transitions.
-
-## Relation to Isabelle
-
-The Lean port follows these Isabelle theories:
-
-- `Interval.thy`
-- `Timed_Word.thy`
-- `TRE_Syntax.thy`
-- `TRE_Semantics.thy`
-- `TA_Syntax.thy`
-- `TA_Semantics.thy`
-- `TA_Combinators.thy`
-- `Trim.thy`
-- `Time_Restriction.thy`
-- `Concat.thy`
-- `Kleene.thy`
-- `Label_Algebra.thy`
-- `Intersection.thy`
-
-## Out of Scope
-
-This proof does not verify:
-
-- the Rust implementation;
-- the parser;
-- DOT export;
-- JANI export;
-- the WASM wrapper;
-- the CLI.
+The Lean proof does not verify the Rust implementation, parser, DOT or JANI
+export, or WASM wrapper.
